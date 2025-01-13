@@ -7,7 +7,7 @@ def parse_rttm(file) -> list:
         for line in rttm:
             parts = line.strip().split()
             if parts[0] == "SPEAKER":
-                start_time, duration, speaker = float(parts[3]), float(parts[4]), parts[5]
+                start_time, duration, speaker = float(parts[3]), float(parts[4]), parts[7]
                 end_time = start_time + duration
                 speaker_segments.append([speaker, start_time, end_time])
     return speaker_segments

@@ -9,6 +9,7 @@ from io import BytesIO
 from find_names import find_names
 from text import split_text, save_to_odt, extract_text_from_odt
 from split_recording import parse_rttm
+from diarization import diarization
 
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -194,8 +195,12 @@ def generate_tasks(transcription):
     return tasks
 
 if __name__ == "__main__":
-    file = "../meeting/audio1725163871"
-    rttm_file = "audio.rttm"
+    file = "../meeting/audio1729287298"
+    if not os.path.exists(f"{file}.mp3"):
+        audio = AudioSegment.from_file(f"{file}.m4a", format="m4a")
+        audio.export(f"{file}.mp3", format="mp3")
+    if not os.path.exists(f"{file}.rttm"):
+        diarization(file)
     if not os.path.exists(f"{file}.odt"):
         result_text = transcription_with_rttm(file)
         save_to_odt(result_text, f"{file}.odt")
