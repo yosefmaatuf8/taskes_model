@@ -51,12 +51,14 @@ def split_text(text, max_tokens):
     words = text.split()  # Split by words
     chunks = []
     current_chunk = []
+    overlap = 15  # Number of overlapping words
 
     for word in words:
         # Check if adding the word exceeds token limit
         if len(tokenizer.encode(" ".join(current_chunk + [word]))) > max_tokens:
             chunks.append(" ".join(current_chunk))  # Save current chunk
-            current_chunk = [word]  # Start new chunk
+            # Start new chunk with the last words of the previous chunk
+            current_chunk = current_chunk[-overlap:] + [word]
         else:
             current_chunk.append(word)
 

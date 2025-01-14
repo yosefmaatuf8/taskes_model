@@ -4,10 +4,8 @@ from dotenv import load_dotenv
 import os
 import tiktoken
 import requests
-from odf.text import P
 from io import BytesIO
-from find_names import find_names
-from text import split_text, save_to_odt, extract_text_from_odt
+from text import save_to_odt
 from split_recording import parse_rttm
 from diarization import diarization
 
@@ -123,77 +121,6 @@ def transcription(file, max_size_mb=24.5):
         print("Processing entire file without splitting...")
         return process_audio_part(audio)
 
-def summarize_chunk(chunk, names):
-    """Summarize each chunk to reduce size."""
-    messages = [
-        {
-            "role": "system",
-            "content": f"Summarize the following transcription of a team meeting, preserving tasks-related names, key points and task-related information. The summarize must be written in hebrew. names is {names}"
-        },
-        {"role": "user", "content": chunk}
-    ]
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=messages,
-            max_tokens=500,  # Generate a compact summary
-            temperature=0.3
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"An error occurred during summarization: {str(e)}"
-
-
-def extract_tasks(summary, names):
-    """Extract tasks from the summarized transcription."""
-    messages = [
-        {"role": "system", "content": f"User send you a transcription of team meet and you need to return two lists, the first of tasks that have been completed, and the second of tasks that need to be completed. The tasks must be written in hebrew.\
-                For each task, write who it belongs to. names is {names}"},
-        {"role": "user", "content": summary}
-    ]
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=messages,
-            max_tokens=300,  # Output tasks only
-            temperature=0.3
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"An error occurred during task extraction: {str(e)}"
-
-
-def generate_tasks(transcription):
-    """Main function to generate tasks from long transcriptions."""
-    # Check token size of transcription
-    names = find_names(transcription)
-    token_count = len(tokenizer.encode(transcription))
-
-    # Split transcription if needed
-    if token_count > MAX_TOKENS:
-        print("Transcription exceeds token limit. Splitting and summarizing...")
-        chunks = split_text(transcription, MAX_TOKENS - 700)  # Leave room for prompt tokens
-
-        # Summarize each chunk
-        summaries = []
-        for i, chunk in enumerate(chunks):
-            print(f"Summarizing chunk {i + 1}/{len(chunks)}...")
-            summary = summarize_chunk(chunk, names)
-            print(summary)
-            summaries.append(summary)
-
-        # Combine summaries
-        combined_summary = " ".join(summaries)
-    else:
-        combined_summary = transcription  # Use as-is if within limit
-
-    # Extract tasks from the summarized transcription
-    print("Extracting tasks from summary...")
-    tasks = extract_tasks(combined_summary, names)
-    return tasks
-
 if __name__ == "__main__":
     file = "../meeting/audio1729287298"
     if not os.path.exists(f"{file}.mp3"):
@@ -201,9 +128,5 @@ if __name__ == "__main__":
         audio.export(f"{file}.mp3", format="mp3")
     if not os.path.exists(f"{file}.rttm"):
         diarization(file)
-    if not os.path.exists(f"{file}.odt"):
-        result_text = transcription_with_rttm(file)
-        save_to_odt(result_text, f"{file}.odt")
-    else:
-        result_text = extract_text_from_odt(f"{file}.odt")
-    print(generate_tasks(result_text))
+    result_text = transcription_with_rttm(file)
+    save_to_odt(result_text, f"{file}.odt")
