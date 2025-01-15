@@ -5,6 +5,7 @@ import os
 import tiktoken
 import requests
 from io import BytesIO
+from datetime import timedelta
 from text import save_to_odt
 from split_recording import parse_rttm
 from diarization import diarization
@@ -64,6 +65,8 @@ def transcription_with_rttm(file, max_size_mb=24.5):
     prev_speaker = None
     combined_segment = AudioSegment.empty()
 
+    start_time_speaker = 0
+    end_time_speaker = 0
     for segment in speaker_segments:
         speaker, start_time, end_time = segment[0], segment[1], segment[2]
         if speaker == prev_speaker:
@@ -73,12 +76,14 @@ def transcription_with_rttm(file, max_size_mb=24.5):
             # Process the previous combined segment
             if combined_segment.duration_seconds > min_start_time:
                 transcription_result = process_audio_part(combined_segment)
-                conversation += f"{prev_speaker}: {transcription_result.strip()}\n\n"
+                conversation += f"{timedelta(seconds=round(start_time_speaker))} --> {timedelta(seconds=round(end_time_speaker))}\n{prev_speaker}: {transcription_result.strip()}\n\n"
 
             # Start a new segment for the new speaker
+            start_time_speaker = start_time
             prev_speaker = speaker
             combined_segment = audio[start_time * 1000:end_time * 1000]
             print(f"speaker: {prev_speaker}, time: {start_time}")
+        end_time_speaker = end_time
 
     # Process the last combined segment
     if combined_segment.duration_seconds > 0:
@@ -122,7 +127,7 @@ def transcription(file, max_size_mb=24.5):
         return process_audio_part(audio)
 
 if __name__ == "__main__":
-    file = "../meeting/audio1729287298"
+    file = "../meeting/audio1725163871"
     if not os.path.exists(f"{file}.mp3"):
         audio = AudioSegment.from_file(f"{file}.m4a", format="m4a")
         audio.export(f"{file}.mp3", format="mp3")
