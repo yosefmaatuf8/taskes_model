@@ -207,3 +207,265 @@ if __name__ == "__main__":
     else:
         result_text = extract_text_from_odt(f"{file}.odt")
     print(generate_tasks(result_text))
+
+
+
+
+from pydub import AudioSegment
+from openai import OpenAI
+from pyannote.audio import Pipeline
+from dotenv import load_dotenv
+import os
+import tiktoken
+import requests
+from io import BytesIO
+from odf.opendocument import OpenDocumentText, load
+from odf.text import P
+
+
+class AudioHandler:
+    def __init__(self, huggingface_api_key=None):
+        load_dotenv()
+        self.api_key = huggingface_api_key or os.getenv("HUGGINGFACE_API_KEY")
+        self.pipeline = Pipeline.from_pretrained(
+            "pyannote/speaker-diarization@2.1",
+            use_auth_token=self.api_key
+        )
+
+    def convert_to_mp3(self, file_path):
+        audio = AudioSegment.from_file(file_path, format="m4a")
+        mp3_path = file_path.replace(".m4a", ".mp3")
+        audio.export(mp3_path, format="mp3")
+        return mp3_path
+
+    def run_diarization(self, file_path):
+        diarization = self.pipeline({"uri": "audio", "audio": file_path})
+        rttm_path = file_path.replace(".mp3", ".rttm")
+        with open(rttm_path, "w") as rttm_file:
+            diarization.write_rttm(rttm_file)
+        return rttm_path
+
+    def split_audio(self, audio, max_size_mb):
+        file_size_mb = len(audio) / (1024 * 1024)
+        if file_size_mb <= max_size_mb:
+            return [audio]
+
+        parts = []
+        part_duration = len(audio) // (file_size_mb // max_size_mb + 1)
+        for start in range(0, len(audio), part_duration):
+            parts.append(audio[start:start + part_duration])
+        return parts
+
+
+class TaskManager:
+    @staticmethod
+    def save_to_odt(text, filename):
+        doc = OpenDocumentText()
+        for line in text.split("\n"):
+            if line.strip():
+                doc.text.addElement(P(text=line))
+                doc.text.addElement(P(text=""))
+        doc.save(filename)
+
+    @staticmethod
+    def extract_text_from_odt(filename):
+        doc = load(filename)
+        return "\n".join(str(p) for p in doc.getElementsByType(P))
+
+class TranscriptionHandler:
+    def __init__(self, openai_api_key, huggingface_api_key=None, language="he"):
+        self.api_key = openai_api_key
+        self.language = language
+        self.client = OpenAI(api_key=self.api_key)
+        self.tokenizer = tiktoken.encoding_for_model("gpt-4")
+        self.max_tokens = 8192
+
+        self.audio_handler = AudioHandler(huggingface_api_key)
+        self.task_manager = TaskManager()
+
+
+    def find_in_chunk(self, chunk, names_string):
+        """Infer speaker names from a chunk of transcription."""
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "The user will have a transcript of a meeting with user separation. "
+                    "You are required to return who is speaker 0, etc. "
+                    "Avraham is manager of the meet, the members are: Avraham, Amir, Shuky, "
+                    "Benzy, Yosef, Yehuda, David G. and David S. The order and numbering "
+                    "of the speakers says nothing about their names, you have to infer names "
+                    "only from the transcription. If there is a speaker that you don't know, "
+                    "write 'unknown'."
+                ),
+            },
+            {
+                "role": "system",
+                "content": f"These names are evaluated based on the previous parts of the conversation: {names_string}. Keep them unless you have proof to the contrary.",
+            },
+            {"role": "user", "content": chunk},
+        ]
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=messages,
+                max_tokens=300,
+                temperature=0.3,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            return f"An error occurred during name inference: {str(e)}"
+
+    def parse_names(self, names_string, known_names):
+        """Parse the names string into a dictionary of speaker labels."""
+        names_dict = {}
+        lines = names_string.split("\n")
+        for line in lines:
+            if line.strip():  # Skip empty lines
+                speaker, name = line.split(":", 1)
+                speaker = speaker.strip()
+                name = name.strip()
+
+                # Only add 'unknown' if the speaker is not in known_names
+                if name.lower() == 'unknown' and speaker not in known_names:
+                    names_dict[speaker] = name
+                elif name.lower() != 'unknown':
+                    names_dict[speaker] = name
+        return names_dict
+
+    def find_names(self, transcription):
+        """Find names from a long transcription."""
+        token_count = len(self.tokenizer.encode(transcription))
+        known_names = {}
+        names_string = ""
+
+        if token_count > self.max_tokens:
+            print("Transcription exceeds token limit. Splitting and processing...")
+            chunks = self.split_text(transcription, self.max_tokens - 700)
+
+            for i, chunk in enumerate(chunks):
+                print(f"Processing chunk {i + 1}/{len(chunks)}...")
+                names_string = self.find_in_chunk(chunk, names_string)
+                print(names_string)
+
+                names = self.parse_names(names_string, known_names)
+                known_names.update(names)
+        else:
+            names_string = self.find_in_chunk(transcription, names_string)
+            names = self.parse_names(names_string, known_names)
+            known_names.update(names)
+
+        print(f"Final speaker names: {known_names}")
+        return known_names
+
+    def split_text(self, text, max_tokens):
+        """Split text into chunks within the token limit."""
+        words = text.split()
+        chunks = []
+        current_chunk = []
+
+        for word in words:
+            if len(self.tokenizer.encode(" ".join(current_chunk + [word]))) > max_tokens:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = [word]
+            else:
+                current_chunk.append(word)
+
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+        return chunks
+
+    # Other existing methods remain as before...
+    # def transcribe_audio(self, audio_segment):
+    #     buffer = BytesIO()
+    #     audio_segment.export(buffer, format="mp3")
+    #     buffer.seek(0)
+    #
+    #     url = "https://api.openai.com/v1/audio/transcriptions"
+    #     headers = {"Authorization": f"Bearer {self.api_key}"}
+    #     files = {"file": ("audio.mp3", buffer, "audio/mp3")}
+    #     data = {"model": "whisper-1", "language": self.language}
+    #
+    #     response = requests.post(url, headers=headers, files=files, data=data)
+    #     if response.status_code == 200:
+    #         return response.json()["text"]
+    #     else:
+    #         raise Exception(f"Error in transcription: {response.status_code}, {response.text}")
+    #
+    # def transcription_with_rttm(self, file_path, max_size_mb=24.5):
+    #     # Convert audio if necessary
+    #     mp3_path = file_path if file_path.endswith(".mp3") else self.audio_handler.convert_to_mp3(file_path)
+    #     rttm_path = mp3_path.replace(".mp3", ".rttm")
+    #     if not os.path.exists(rttm_path):
+    #         self.audio_handler.run_diarization(mp3_path)
+    #
+    #     # Parse diarization segments
+    #     with open(rttm_path, "r") as rttm_file:
+    #         speaker_segments = [
+    #             line.strip().split() for line in rttm_file.readlines() if not line.startswith("#")
+    #         ]
+    #
+    #     audio = AudioSegment.from_file(mp3_path, format="mp3")
+    #     conversation = ""
+    #     prev_speaker = None
+    #     combined_segment = AudioSegment.empty()
+    #
+    #     for segment in speaker_segments:
+    #         speaker, start_time, end_time = segment[0], float(segment[3]), float(segment[4])
+    #         if speaker == prev_speaker:
+    #             combined_segment += audio[start_time * 1000:end_time * 1000]
+    #         else:
+    #             if combined_segment.duration_seconds > 0:
+    #                 transcription_result = self.transcribe_audio(combined_segment)
+    #                 conversation += f"{prev_speaker}: {transcription_result.strip()}\n\n"
+    #
+    #             prev_speaker = speaker
+    #             combined_segment = audio[start_time * 1000:end_time * 1000]
+    #
+    #     # Process the last segment
+    #     if combined_segment.duration_seconds > 0:
+    #         transcription_result = self.transcribe_audio(combined_segment)
+    #         conversation += f"{prev_speaker}: {transcription_result.strip()}\n"
+    #
+    #     return conversation
+
+    # def process_transcription(self, file_path, max_size_mb=24.5):
+    #     audio = AudioSegment.from_file(file_path, format="mp3")
+    #     audio_parts = self.audio_handler.split_audio(audio, max_size_mb)
+    #     return " ".join(self.transcribe_audio(part) for part in audio_parts)
+
+    def generate_tasks(self, transcription):
+        # Find names and process tasks
+        def split_text(text, max_tokens):
+            words = text.split()
+            chunks, current_chunk = [], []
+            for word in words:
+                if len(self.tokenizer.encode(" ".join(current_chunk + [word]))) > max_tokens:
+                    chunks.append(" ".join(current_chunk))
+                    current_chunk = [word]
+                else:
+                    current_chunk.append(word)
+            if current_chunk:
+                chunks.append(" ".join(current_chunk))
+            return chunks
+
+        token_count = len(self.tokenizer.encode(transcription))
+        if token_count > self.max_tokens:
+            chunks = split_text(transcription, self.max_tokens - 700)
+            summaries = [self.summarize_transcription(chunk) for chunk in chunks]
+            transcription = " ".join(summaries)
+
+        return self.extract_tasks(transcription)
+
+    def summarize_transcription(self, transcription):
+        messages = [{"role": "user", "content": f"Summarize this meeting transcript: {transcription}"}]
+        response = self.client.chat.completions.create(model="gpt-4", messages=messages, max_tokens=500)
+        return response.choices[0].message.content
+
+    def extract_tasks(self, summarized_text):
+        messages = [
+            {"role": "user", "content": f"Extract tasks from this text: {summarized_text}"}
+        ]
+        response = self.client.chat.completions.create(model="gpt-4", messages=messages, max_tokens=300)
+        return response.choices[0].message.content
