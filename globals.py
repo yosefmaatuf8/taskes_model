@@ -14,7 +14,8 @@ class Globals:
         self.huggingface_api_key = self.validate_env("HUGGINGFACE_API_KEY")
         self.path_transcription = self.validate_path("PATH_TRANSCRIPTION")  # Path validation
         self.functions_dict = functions_dict
-        self.to_emails = ["yosefmaatuf848@gmail.com"]
+        self.db_users_path = self.validate_path("DB_USERS_PATH")
+        self.model_diarization = self.validate_path("MODEL_DIARIZATION")
         self.language = "he"
         self.list_tasks = None
 

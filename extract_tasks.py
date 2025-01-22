@@ -10,15 +10,16 @@ import tiktoken
 from globals import GLOBALS
 
 
-class TranscriptionHandler:
+class ExtractTasks:
     def __init__(self,transcription,trello_api):
         self.api_key = GLOBALS.openai_api_key
         self.language = GLOBALS.language
         self.client = OpenAI(api_key=self.api_key)
         self.tokenizer = tiktoken.encoding_for_model("gpt-4")
         self.trello_api = trello_api
-        GLOBALS.list_tasks =self.trello_api.get_all_card_details()
+        GLOBALS.list_tasks = self.trello_api.get_all_card_details()
         self.list_tasks = str(GLOBALS.list_tasks)
+        self.users_names = self.trello_api.get_usernames()
         self.functions_dict = GLOBALS.functions_dict
         self.max_tokens = int(GLOBALS.max_tokens)
         self.transcription = transcription
@@ -67,7 +68,8 @@ class TranscriptionHandler:
         else:
             # Extract tasks from the summarized transcription
             print("Extracting tasks from transcription...")
-            tasks = self.extract_tasks(self.transcription)
+            task = self.extract_tasks(self.transcription)
+            tasks.append(task)
             print(tasks)
         print("-" * 50)
         return tasks
@@ -79,29 +81,43 @@ class TranscriptionHandler:
             [f"{func}: {params}" for func, params in GLOBALS.functions_dict.items()]
         )
         messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are managing a team's task organization based on a meeting transcription and a list of existing tasks. "
-                    "Your roles include:\n"
-                    "- Creating cards for new tasks.\n"
-                    "- Assigning team members to tasks based on meeting context or explicit mentions.\n"
-                    "- Moving cards between lists to reflect task progress (to do, in process, done).\n"
-                    "- Leaving comments on cards to provide updates, context, or references to the meeting discussion.\n\n"
-                    "You must return a list of dictionaries where each dictionary specifies an action to perform. "
-                    "Each dictionary must have the following format:\n"
-                    "{ \"function\": \"function_name\", \"params\": [\"param1\", \"param2\", \"param3\"] }.\n\n"
-                    "The valid functions and their required parameters are:\n"
-                    f"{functions_description}\n\n"
-                    "If no actions are needed, return an empty list.\n\n"
-                    "Ensure the returned string is valid JSON."
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"Transcription: {transcription}\nExisting tasks: {self.list_tasks}"
-            }
-        ]
+        {
+            "role": "system",
+            "content": (
+                "You are responsible for managing the team's task organization based on a meeting transcription and a list of existing tasks. "
+                "Your roles include:\n"
+                "- Creating cards for new tasks.\n"
+                "- Assigning team members to tasks based on the meeting context or explicit mentions.\n"
+                "- Moving cards between lists to reflect task progress (e.g., 'to do', 'in process', 'done').\n"
+                "- Adding comments to cards to provide updates, context, or references to the meeting discussion.\n\n"
+                "You must return a list of dictionaries, each specifying an action to perform. "
+                "Each dictionary must follow this format:\n"
+                "[{ \"function\": \"function_name\", \"params\": [\"param1\", \"param2\", \"param3\"] }].\n\n"
+                "The valid functions and their required parameters are:\n"
+                f"{functions_description}\n\n"
+                "If no actions are needed, return an empty list.\n\n"
+                "**Important Instructions:**\n"
+                "1. Before returning the list, write the sign `&` on a new line and then write the list on the next line.\n"
+                "2. Do not write anything after the list.\n"
+                "3. Ensure the output is valid JSON and starts immediately after the `&` symbol.\n\n"
+                "The following is the thought process you must follow:\n"
+                "1. Divide the text into sections, and determine, based on your understanding and context, whether each section is related to an update on an existing task, a new task, a dilemma, or an unimportant conversation. Consider the speaker's name and any provided data about it.\n"
+                "2. Go through the text again along with your classification. For each relevant section, match it with an appropriate function. If no function applies, move to the next section.\n"
+                "3. Provide a brief summary of the entire text with your classification for each section.\n"
+                "4. Create a list of all the functions in the required JSON format and include it in the response as follows:\n"
+                "```\n"
+                "&\n"
+                "[{ \"function\": \"function_name\", \"params\": [\"param1\", \"param2\", \"param3\"] }]\n"
+                "```\n"
+                "5. Ensure that the list starts immediately after the `&` symbol, and nothing appears after the list."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Transcription: {transcription}\nExisting tasks: {self.list_tasks}, Users names and roles: {self.users_names}"
+        }
+    ]
+
 
         try:
             response = self.client.chat.completions.create(

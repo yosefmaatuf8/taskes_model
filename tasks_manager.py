@@ -1,20 +1,21 @@
 from dailysummary import DailySummary
-from transcription_handler import TranscriptionHandler
+from extract_tasks import ExtractTasks
 from trello_api import TrelloAPI
 from globals import GLOBALS
 import json
-import re
 
 
 class TasksManager:
-    def __init__(self,):
+    def __init__(self,
+                 sender_email =GLOBALS.sender_email,
+                 sender_password = GLOBALS.sender_password,):
         """Initialize the Main class and prepare transcription handling."""
         self.transcription_text = None  # To store the transcription content
-        self.transcription_handler = None  # To process transcription tasks
+        self.extract_tasks = None  # To process transcription tasks
         self.tasks = None
         self.trello_api = None
-        self.to_emails = GLOBALS.to_emails  # Load email recipients from globals
-        self.summary_model = DailySummary(GLOBALS.sender_email, GLOBALS.sender_password)  # Initialize email sender
+        # self.to_emails = to_emails  # Load email recipients from globals
+        self.summary_model = DailySummary(sender_email, sender_password)  # Initialize email sender
         self.summary = None  # Placeholder for the generated summary
 
     @staticmethod
@@ -33,8 +34,8 @@ class TasksManager:
             return None
 
         # Initialize the transcription handler and generate tasks
-        self.transcription_handler = TranscriptionHandler(self.transcription_text,self.trello_api)
-        tasks = self.transcription_handler.generate_tasks()
+        self.extract_tasks = ExtractTasks(self.transcription_text, self.trello_api)
+        tasks = self.extract_tasks.generate_tasks()
         print("Tasks generated successfully.")
         return tasks
 
@@ -45,7 +46,7 @@ class TasksManager:
             return
 
         print("Processing and sending the daily summary...")
-        self.summary_model.process_and_notify(self.transcription_text, self.to_emails)
+        self.summary_model.process_and_notify(self.transcription_text)
         print("Daily summary sent successfully.")
 
     def extract_and_run_tasks(self):
@@ -58,8 +59,16 @@ class TasksManager:
         for task in self.tasks:
             if isinstance(task, str) and task.strip():  # Ensure the string is not empty or whitespace
                 try:
+                    str_task = task.split('&', 1)[1]
+                    print("this is parsed_task -- ",str_task)
+
+                except ValueError:
+                    print("The expected separator '&' was not found in the model output.")
+                    continue
+
+                try:
                     # Attempt to parse the string as JSON
-                    parsed_task = json.loads(task)
+                    parsed_task = json.loads(str_task)
 
                     # Ensure the parsed data is a list of dictionaries
                     if isinstance(parsed_task, list) and all(isinstance(t, dict) for t in parsed_task):
@@ -67,7 +76,7 @@ class TasksManager:
                     else:
                         print(f"Skipping invalid task format: {parsed_task}")
                 except json.JSONDecodeError as e:
-                    print(f"Skipping invalid JSON: {task}, Error: {e}")
+                    print(f"Skipping invalid JSON: {str_task}, Error: {e}")
             else:
                 print(f"Skipping non-string or empty task: {task}")
 

@@ -98,6 +98,18 @@ class TrelloAPI:
 
         return cards_details
 
+    def get_usernames(self):
+        """
+        Fetches all usernames of members in the board.
+        """
+        # Get the board using the stored board_id
+        board = self.client.get_board(self.board_id)
+        # Fetch all members of the board
+        members = board.get_members()
+        # Extract and return their usernames
+        usernames = [member.username for member in members]
+        return usernames
+
 # Run the example flow
 if __name__ == "__main__":
     # comment_on_card('Creating action items', 'comment')
