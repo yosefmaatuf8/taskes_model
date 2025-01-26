@@ -15,7 +15,8 @@ class Globals:
         self.path_transcription = self.validate_path("PATH_TRANSCRIPTION")  # Path validation
         self.functions_dict = functions_dict
         self.db_users_path = self.validate_path("DB_USERS_PATH")
-        self.model_diarization = self.validate_path("MODEL_DIARIZATION")
+        self.model_diarization = self.validate_env("MODEL_DIARIZATION")
+        self.num_speakers =self.validate_env("NUM_SPEAKERS")
         self.language = "he"
         self.list_tasks = None
 

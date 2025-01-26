@@ -2,6 +2,8 @@ from dailysummary import DailySummary
 from extract_tasks import ExtractTasks
 from trello_api import TrelloAPI
 from globals import GLOBALS
+from audio.audio_handler import AudioHandler
+from audio.transcription_manager import TranscriptionHandler
 import json
 
 
@@ -10,6 +12,11 @@ class TasksManager:
                  sender_email =GLOBALS.sender_email,
                  sender_password = GLOBALS.sender_password,):
         """Initialize the Main class and prepare transcription handling."""
+        self.segments = None
+        self.rttm_path = None
+        self.mp3_path = None
+        self.audio_handler = None
+        self.transcription_handler = None
         self.transcription_text = None  # To store the transcription content
         self.extract_tasks = None  # To process transcription tasks
         self.tasks = None
@@ -17,6 +24,15 @@ class TasksManager:
         # self.to_emails = to_emails  # Load email recipients from globals
         self.summary_model = DailySummary(sender_email, sender_password)  # Initialize email sender
         self.summary = None  # Placeholder for the generated summary
+
+
+    def prepare_transcription(self):
+        self.audio_handler = AudioHandler()
+        self.mp3_path, self.rttm_path, self.segments = self.audio_handler.run
+        if not self.mp3_path:
+            print("")
+        self.transcription_handler = TranscriptionHandler(self.mp3_path, self.rttm_path, self.segments)
+
 
     @staticmethod
     def read_transcription():
@@ -27,7 +43,7 @@ class TasksManager:
         except FileNotFoundError:
             raise FileNotFoundError("Transcription file not found.")
 
-    def process_transcription(self):
+    def process_extract(self):
         """Process the transcription and generate tasks."""
         if not self.transcription_text:
             print("Error: No transcription text available for processing.")
@@ -145,7 +161,7 @@ class TasksManager:
             return
 
         print("Processing transcription...")
-        self.tasks = self.process_transcription()  # Process transcription and generate tasks
+        self.tasks = self.process_extract()  # Process generate tasks
 
         if self.tasks:
             self.extract_and_run_tasks()

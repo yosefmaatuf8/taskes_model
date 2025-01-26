@@ -9,12 +9,12 @@ from io import BytesIO
 from globals import GLOBALS
 
 class TranscriptionHandler:
-    def __init__(self, language=GLOBALS.LANGUAGE, mp3_path=None, rttm_path=None, speaker_segments=None):
+    def __init__(self, language=GLOBALS.language, mp3_path=None, rttm_path=None, speaker_segments=None):
         self.api_key = GLOBALS.API_KEY
         self.language = language
         self.client = OpenAI(api_key=self.api_key)
         self.tokenizer = tiktoken.encoding_for_model("gpt-4")
-        self.max_tokens = 8192
+        self.max_tokens = GLOBALS.max_tokens
         self.mp3_path = mp3_path
         self.rttm_path = rttm_path
         self.speaker_segments = speaker_segments
