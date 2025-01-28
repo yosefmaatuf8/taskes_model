@@ -1,23 +1,21 @@
+import os
 from dailysummary import DailySummary
 from extract_tasks import ExtractTasks
 from trello_api import TrelloAPI
 from globals import GLOBALS
-from audio.audio_handler import AudioHandler
-from audio.transcription_manager import TranscriptionHandler
+from transcription_with_embeding import TranscriptionHandler
 import json
 
 
 class TasksManager:
     def __init__(self,
                  sender_email =GLOBALS.sender_email,
-                 sender_password = GLOBALS.sender_password,):
+                 sender_password = GLOBALS.sender_password):
         """Initialize the Main class and prepare transcription handling."""
-        self.segments = None
-        self.rttm_path = None
         self.mp3_path = None
         self.audio_handler = None
         self.transcription_handler = None
-        self.transcription_text = None  # To store the transcription content
+        self.transcription_json = None  # To store the transcription content
         self.extract_tasks = None  # To process transcription tasks
         self.tasks = None
         self.trello_api = None
@@ -26,43 +24,49 @@ class TasksManager:
         self.summary = None  # Placeholder for the generated summary
 
 
-    def prepare_transcription(self):
-        self.audio_handler = AudioHandler()
-        self.mp3_path, self.rttm_path, self.segments = self.audio_handler.run
-        if not self.mp3_path:
-            print("")
-        self.transcription_handler = TranscriptionHandler(self.mp3_path, self.rttm_path, self.segments)
+    def process_transcription(self,mp3_path):
+        self.transcription_handler = TranscriptionHandler(mp3_path)
+        self.transcription_json = self.transcription_handler.run()
+        return self.transcription_json
 
 
-    @staticmethod
-    def read_transcription():
+    def read_transcription(self):
         """Read the transcription from a file."""
         try:
-            with open(GLOBALS.path_transcription, 'r') as f:
-                return str(f.read())
+            with open(self.transcription_json, 'r') as f:
+                return json.load(f)
         except FileNotFoundError:
             raise FileNotFoundError("Transcription file not found.")
 
+    def prepare_transcription(self):
+        """Prepare transcription in the format: 'Speaker: Text' for each line."""
+        formatted_transcription = []
+        for entry in self.transcription_json:
+            speaker = entry.get("speaker", "Unknown")
+            text = entry.get("text", "")
+            formatted_transcription.append(f"{speaker}: {text}")
+        return "\n".join(formatted_transcription)
+
     def process_extract(self):
         """Process the transcription and generate tasks."""
-        if not self.transcription_text:
+        if not self.transcription_json:
             print("Error: No transcription text available for processing.")
             return None
 
         # Initialize the transcription handler and generate tasks
-        self.extract_tasks = ExtractTasks(self.transcription_text, self.trello_api)
+        self.extract_tasks = ExtractTasks(self.transcription_json, self.trello_api)
         tasks = self.extract_tasks.generate_tasks()
         print("Tasks generated successfully.")
         return tasks
 
     def dailysummary(self):
         """Generate and send a daily summary via email."""
-        if not self.transcription_text:
+        if not self.transcription_json:
             print("Error: No transcription text available to process.")
             return
 
         print("Processing and sending the daily summary...")
-        self.summary_model.process_and_notify(self.transcription_text)
+        self.summary_model.process_and_notify(self.transcription_json)
         print("Daily summary sent successfully.")
 
     def extract_and_run_tasks(self):
@@ -151,24 +155,26 @@ class TasksManager:
             except Exception as e:
                 print(f"Error executing task {task}: {e}")
 
-    def run(self):
+    def run(self,mp3_path=None):
         """Run the main workflow."""
         self.trello_api = TrelloAPI()
-        self.transcription_text = self.read_transcription()  # Read transcription from file
-
-        if not self.transcription_text:
-            print("Aborting: No transcription text found.")
+        if not os.path.exists(mp3_path):
+            print("Aborting: No mp3_path found.")
             return
 
         print("Processing transcription...")
+        self.transcription_json = self.process_transcription(mp3_path)
+        self.read_transcription()  # Read transcription from file
+
         self.tasks = self.process_extract()  # Process generate tasks
 
         if self.tasks:
             self.extract_and_run_tasks()
             print("Sending daily summary...")
-            # self.dailysummary()  # Send the daily summary
         else:
             print("No tasks generated. Skipping summary.")
+        self.dailysummary()  # Send the daily summary
+
 
 if __name__ == "__main__":
     test = TasksManager()

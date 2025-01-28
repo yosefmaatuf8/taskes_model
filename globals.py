@@ -14,7 +14,9 @@ class Globals:
         self.huggingface_api_key = self.validate_env("HUGGINGFACE_API_KEY")
         self.path_transcription = self.validate_path("PATH_TRANSCRIPTION")  # Path validation
         self.functions_dict = functions_dict
-        self.db_users_path = self.validate_path("DB_USERS_PATH")
+        self.db_path = self.validate_path("DB_PATH")
+        self.db_username = 'db_user.csv'
+        self.output_path = self.validate_path("OUTPUT_PATH")
         self.model_diarization = self.validate_env("MODEL_DIARIZATION")
         self.num_speakers =self.validate_env("NUM_SPEAKERS")
         self.language = "he"
