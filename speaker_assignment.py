@@ -48,7 +48,7 @@ def get_closest_speaker(segment_embedding, track_embeddings):
     
     return closest_speaker, min_distance
 
-def assign_speakers_to_clips(audio_clips, embeddings, inference):
+def assign_speakers_to_clips(audio_clips, embeddings, inference, tresh_hold):
     speakers = []
     speaker = 0
 
@@ -66,7 +66,7 @@ def assign_speakers_to_clips(audio_clips, embeddings, inference):
         else:
             segment_embedding = embedding
             closest_speaker, min_distance = get_closest_speaker(segment_embedding, embeddings)
-            if min_distance > 0.8:
+            if min_distance > tresh_hold:
                 speaker = len(embeddings)
                 embeddings[f"speaker_{speaker}"] = segment_embedding
             else:
@@ -77,9 +77,10 @@ def assign_speakers_to_clips(audio_clips, embeddings, inference):
 if __name__ == "__main__":
     # Define your parameters
     load_dotenv()
-    audio_file_path = "../meeting/audio1725163871little"
+    audio_file_path = "../meeting/audio1725163871"
     api_key = os.getenv("OPENAI_API_KEY")
-    SEGMENT_LENGTHS = [5]  # Length of each segment in seconds
+    SEGMENT_LENGTHS = [3]  # Length of each segment in seconds
+    tresh_hold = 0.8
 
     # Load the model
     inference = load_model(api_key)
@@ -94,7 +95,7 @@ if __name__ == "__main__":
     embeddings = {}
 
     # Assign speakers to each audio clip
-    speakers, updated_embeddings = assign_speakers_to_clips(audio_clips_dicts, embeddings, inference)
+    speakers, updated_embeddings = assign_speakers_to_clips(audio_clips_dicts, embeddings, inference, tresh_hold)
 
     # Print the results
     for i, speaker in enumerate(speakers):
