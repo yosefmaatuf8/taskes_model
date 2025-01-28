@@ -12,6 +12,7 @@ class TasksManager:
                  sender_email =GLOBALS.sender_email,
                  sender_password = GLOBALS.sender_password):
         """Initialize the Main class and prepare transcription handling."""
+        self.transcription_txt = None
         self.mp3_path = None
         self.audio_handler = None
         self.transcription_handler = None
@@ -38,14 +39,6 @@ class TasksManager:
         except FileNotFoundError:
             raise FileNotFoundError("Transcription file not found.")
 
-    def prepare_transcription(self):
-        """Prepare transcription in the format: 'Speaker: Text' for each line."""
-        formatted_transcription = []
-        for entry in self.transcription_json:
-            speaker = entry.get("speaker", "Unknown")
-            text = entry.get("text", "")
-            formatted_transcription.append(f"{speaker}: {text}")
-        return "\n".join(formatted_transcription)
 
     def process_extract(self):
         """Process the transcription and generate tasks."""
@@ -163,8 +156,9 @@ class TasksManager:
             return
 
         print("Processing transcription...")
-        self.transcription_json = self.process_transcription(mp3_path)
+        self.transcription_json, self.transcription_txt = self.process_transcription(mp3_path)
         self.read_transcription()  # Read transcription from file
+
 
         self.tasks = self.process_extract()  # Process generate tasks
 
