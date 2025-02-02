@@ -1,5 +1,5 @@
 import os
-from dailysummary import DailySummary
+from daily_summary import DailySummary
 from extract_tasks import ExtractTasks
 from trello_api import TrelloAPI
 from globals import GLOBALS
@@ -12,6 +12,7 @@ class TasksManager:
                  sender_email =GLOBALS.sender_email,
                  sender_password = GLOBALS.sender_password):
         """Initialize the Main class and prepare transcription handling."""
+        self.transcription_txt = None
         self.mp3_path = None
         self.audio_handler = None
         self.transcription_handler = None
@@ -22,6 +23,7 @@ class TasksManager:
         # self.to_emails = to_emails  # Load email recipients from globals
         self.summary_model = DailySummary(sender_email, sender_password)  # Initialize email sender
         self.summary = None  # Placeholder for the generated summary
+        self.transcription_handler_chunk = TranscriptionHandler()
 
 
     def process_transcription(self,mp3_path):
@@ -38,14 +40,6 @@ class TasksManager:
         except FileNotFoundError:
             raise FileNotFoundError("Transcription file not found.")
 
-    def prepare_transcription(self):
-        """Prepare transcription in the format: 'Speaker: Text' for each line."""
-        formatted_transcription = []
-        for entry in self.transcription_json:
-            speaker = entry.get("speaker", "Unknown")
-            text = entry.get("text", "")
-            formatted_transcription.append(f"{speaker}: {text}")
-        return "\n".join(formatted_transcription)
 
     def process_extract(self):
         """Process the transcription and generate tasks."""
@@ -155,6 +149,10 @@ class TasksManager:
             except Exception as e:
                 print(f"Error executing task {task}: {e}")
 
+    def ran_on_chunk(self, chunk):
+        transcription = self.transcription_handler_chunk.run_chunk(chunk)
+        print(transcription)
+
     def run(self,mp3_path=None):
         """Run the main workflow."""
         self.trello_api = TrelloAPI()
@@ -163,8 +161,9 @@ class TasksManager:
             return
 
         print("Processing transcription...")
-        self.transcription_json = self.process_transcription(mp3_path)
+        self.transcription_json, self.transcription_txt = self.process_transcription(mp3_path)
         self.read_transcription()  # Read transcription from file
+
 
         self.tasks = self.process_extract()  # Process generate tasks
 

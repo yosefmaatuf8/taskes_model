@@ -188,6 +188,16 @@ class TranscriptionHandler:
                     names_dict[speaker] = name
         return names_dict
 
+
+    def prepare_transcription(self,full_transcription_json):
+        """Prepare transcription in the format: 'Speaker: Text' for each line."""
+        formatted_transcription = []
+        for entry in full_transcription_json:
+            speaker = entry.get("speaker", "Unknown")
+            text = entry.get("text", "")
+            formatted_transcription.append(f"{speaker}: {text}")
+        return "\n".join(formatted_transcription)
+
     def run(self, output_dir=GLOBALS.output_path, output_file=None):
         """Main method to execute transcription and speaker identification."""
         # Step 1: Load and preprocess audio
@@ -218,14 +228,45 @@ class TranscriptionHandler:
 
         # Step 6: Save the final transcription with updated speaker names
         today = datetime.datetime.today().strftime('%d_%m_%y')
-        output_file = output_file or f"transcription_{today}.json"
-        output_path = os.path.join(output_dir, output_file)
+
+        if output_file:
+            # If output_file ends with .json, use it for the JSON output file
+            if output_file.endswith('.json'):
+                output_path_json = os.path.join(output_dir, output_file)
+                output_path_txt = os.path.join(output_dir, output_file.replace('.json',
+                                                                               '.txt'))  # Change the extension for the text file
+            elif output_file.endswith('.txt'):
+                output_path_txt = os.path.join(output_dir, output_file)
+                output_path_json = os.path.join(output_dir, output_file.replace('.txt',
+                                                                                '.json'))  # Change the extension for the JSON file
+            else:
+                # If no extension or a different one, use default names
+                output_path_json = os.path.join(output_dir, f"transcription_{today}.json")
+                output_path_txt = os.path.join(output_dir, f"transcription_{today}.txt")
+        else:
+            # If no output_file is provided, use default names for both
+            output_path_json = os.path.join(output_dir, f"transcription_{today}.json")
+            output_path_txt = os.path.join(output_dir, f"transcription_{today}.txt")
+
+            # Ensure output directory exists
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        # Save the final transcription with all speaker names updated
-        with open(output_path, "w", encoding="utf-8") as f:
+            # Save the final transcription with all speaker names updated in JSON format
+        with open(output_path_json, "w", encoding="utf-8") as f:
             json.dump(full_transcription, f, ensure_ascii=False, indent=4)
 
-        print(f"Transcription saved to {output_path}")
-        return output_path
+        print(f"Transcription saved to {output_path_json}")
+
+        # Read the JSON file and prepare the transcription in text format
+        with open(output_path_json, 'r') as f:
+            full_transcription_json = json.load(f)
+            full_transcription_txt = self.prepare_transcription(full_transcription_json)
+
+        # Save the transcription as a text file
+        with open(output_path_txt, "w", encoding="utf-8") as f:
+            f.write(full_transcription_txt)
+
+        print(f"Text transcription saved to {output_path_txt}")
+
+        return output_path_json,output_path_txt
