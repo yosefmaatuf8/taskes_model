@@ -1,11 +1,11 @@
-from pyannote.audio import Model
-from pyannote.audio import Inference
+from pyannote.audio import Model, Inference
 from scipy.spatial.distance import cosine
 import numpy as np
 import os
 from pydub import AudioSegment
 from io import BytesIO
 from dotenv import load_dotenv
+from score_record import compute_similarity
 
 def load_model(api_key):
     # Initialize the model
@@ -48,39 +48,71 @@ def get_closest_speaker(segment_embedding, track_embeddings):
     
     return closest_speaker, min_distance
 
-def assign_speakers_to_clips(audio_clips, embeddings, inference, tresh_hold):
+def embedding(clip, inference):
+    buffer = BytesIO()
+    clip.export(buffer, format="wav")
+    buffer.seek(0)
+    return inference(buffer)
+
+def assign_speakers_to_clips(audio_clips, embeddings, inference, treshold_closest, trehold_similarity, unknow):
     speakers = []
     speaker = 0
 
     for clip in audio_clips:
-        buffer = BytesIO()
         if len(clip["clip"]) < 400:
-            speakers.append("None")
             continue
-        clip["clip"].export(buffer, format="wav")
-        buffer.seek(0)
-        embedding = inference(buffer)
+
+        similarity = compute_similarity(clip["clip"], 1000, inference)
+        if not embeddings and similarity < trehold_similarity:
+            unknow.append(clip)
+            continue
+
+        segment_embedding = embedding(clip["clip"], inference)
 
         if not embeddings:
-            embeddings[f"speaker_{speaker}"] = embedding
+            embeddings[f"speaker_{speaker}"] = embedding(clip["clip"][:8000], inference)
+            speakers.append({
+                "start": clip["start"],
+                "end": clip["end"],
+                "clip": clip["clip"],
+                "speaker": f"speaker_{speaker}",
+                "distance": 0,
+                "idx": clip["idx"]
+            })
+            continue
+        closest_speaker, min_distance = get_closest_speaker(segment_embedding, embeddings)
+        if similarity < trehold_similarity and min_distance > treshold_closest:
+            unknow.append({
+                "start": clip["start"],
+                "end": clip["end"],
+                "clip": clip["clip"],
+                "speaker": f"speaker_{speaker}",
+                "distance": min_distance,
+                "idx": clip["idx"]                
+            })
         else:
-            segment_embedding = embedding
-            closest_speaker, min_distance = get_closest_speaker(segment_embedding, embeddings)
-            if min_distance > tresh_hold:
+            if min_distance > treshold_closest:
                 speaker = len(embeddings)
-                embeddings[f"speaker_{speaker}"] = segment_embedding
+                embeddings[f"speaker_{speaker}"] = embedding(clip["clip"][:8000], inference)
             else:
                 speaker = int(closest_speaker.split('_')[1])
-        speakers.append(f"speaker_{speaker}")
-    return speakers, embeddings
+            speakers.append({
+                "start": clip["start"],
+                "end": clip["end"],
+                "clip": clip["clip"],
+                "speaker": f"speaker_{speaker}",
+                "distance": min_distance,
+                "idx": clip["idx"]
+            })
+    return speakers, embeddings, unknow
 
 if __name__ == "__main__":
     # Define your parameters
     load_dotenv()
     audio_file_path = "../meeting/audio1725163871"
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("HUGGINGFACE_API_KEY")
     SEGMENT_LENGTHS = [3]  # Length of each segment in seconds
-    tresh_hold = 0.8
+    tresh_hold = 1.0
 
     # Load the model
     inference = load_model(api_key)
@@ -97,6 +129,26 @@ if __name__ == "__main__":
     # Assign speakers to each audio clip
     speakers, updated_embeddings = assign_speakers_to_clips(audio_clips_dicts, embeddings, inference, tresh_hold)
 
+    # Create a directory to save the final speaker audio files
+    if not os.path.exists(audio_file_path):
+        os.makedirs(audio_file_path)
+
+    # Create a dictionary to store combined audio per speaker
+    speaker_audio = {}
+
+    for idx, speaker in enumerate(speakers):
+        # Initialize or append the audio for the speaker
+        if speaker not in speaker_audio:
+            speaker_audio[speaker] = AudioSegment.empty()
+
+        speaker_audio[speaker] += audio_clips_dicts[idx]["clip"]
+
+    # Save each speaker's combined audio to a single file
+    for speaker, combined_audio in speaker_audio.items():
+        # Save the combined audio for each speaker
+        combined_audio.export(os.path.join(audio_file_path, f"{speaker}_combined.wav"), format="wav")
+
     # Print the results
     for i, speaker in enumerate(speakers):
         print(f"Segment {i + 1}: {speaker}")
+    print(f"Number of speakers identified: {len(embeddings)}")
