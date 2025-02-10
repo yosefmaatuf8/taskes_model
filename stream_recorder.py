@@ -7,7 +7,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from tasks_manager import TasksManager
-
+from globals import GLOBALS
 
 class StreamRecorder:
     def __init__(self, stream_url, bucket_name, aws_access_key_id, aws_secret_access_key,
@@ -177,6 +177,8 @@ class StreamRecorder:
             time.sleep(5)
 
 
-
+if __name__ == "__main__":
+    recorder = StreamRecorder(
+        )
 
     recorder.monitor_and_record()

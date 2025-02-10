@@ -3,7 +3,7 @@ from daily_summary import DailySummary
 from extract_tasks import ExtractTasks
 from trello_api import TrelloAPI
 from globals import GLOBALS
-from transcription_with_embeding import TranscriptionHandler
+from transcription_handler import TranscriptionHandler
 import json
 
 
@@ -28,7 +28,7 @@ class TasksManager:
 
     def process_transcription(self,mp3_path):
         self.transcription_handler = TranscriptionHandler(mp3_path)
-        self.transcription_json = self.transcription_handler.run()
+        self.transcription_json, self.transcription_txt = self.transcription_handler.run()
         return self.transcription_json
 
 
@@ -150,7 +150,7 @@ class TasksManager:
                 print(f"Error executing task {task}: {e}")
 
     def ran_on_chunk(self, chunk):
-        transcription = self.transcription_handler_chunk.run_chunk(chunk)
+        transcription = self.transcription_handler_chunk.run(chunk)
         print(transcription)
 
     def run(self,mp3_path=None):
