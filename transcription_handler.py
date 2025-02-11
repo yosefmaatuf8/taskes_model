@@ -21,7 +21,6 @@ class TranscriptionHandler:
     def __init__(self, wav_path=None, language=GLOBALS.language,output_file =None):
         self.names_context = ''
         self.output_file = output_file
-        self.unknown_embeddings = {}
         load_dotenv()
         self.openai_api_key = GLOBALS.openai_api_key
         self.huggingface_api_key = GLOBALS.huggingface_api_key
@@ -31,7 +30,7 @@ class TranscriptionHandler:
         self.tokenizer = tiktoken.encoding_for_model("gpt-4")
         self.audio_helper = Audio()
         self.max_tokens = int(GLOBALS.max_tokens)
-        self.max_size = 25  # Maximum audio duration per segment in mb
+        self.max_size = 10  # Maximum audio duration per segment in mb
         self.embeddings = {}
         self.speakers = []
         self.speaker_count = 0
@@ -41,24 +40,25 @@ class TranscriptionHandler:
         self.chunks = []
         self.full_transcription = []
         self.unknown_segments = []
+        self.unknown_embeddings = {}
 
     def load_model(self):
         """Load the PyAnnotemodel for embeddings."""
         model = Model.from_pretrained("pyannote/embedding", use_auth_token=self.huggingface_api_key)
         return Inference(model, window="whole")
 
+
     def compute_similarity(self, audio):
         """
         Splits a 10-second audio into 2-second chunks, computes embeddings, and returns similarity scores.
-
         :param audio: Audio signal (numpy array).
         :return: Mean similarity score between segments (float) or None if insufficient data.
         """
-        sr = 1000  # דגימה ב-1000Hz (יש לוודא שזה נכון)
-        segment_length = 2 * sr  # 2 שניות במדגם
-        num_segments = 5  # 10 שניות מחולקות ל-5 קטעים של 2 שניות
+        sr = 1000  # Sampling at 1000Hz (ensure this is correct)
+        segment_length = 2 * sr  # 2 seconds in samples
+        num_segments = 2  # 10 seconds split into 5 segments of 2 seconds
 
-        # וידוא שיש מספיק מידע
+        # Ensure there is enough data
         if len(audio) < num_segments * segment_length:
             return None
 
@@ -70,7 +70,7 @@ class TranscriptionHandler:
                 end = (i + 1) * segment_length
                 segment = audio[start:end]
 
-                # המרה לאובייקט קובץ בזיכרון (BytesIO)
+                # Convert to a file-like object in memory (BytesIO)
                 buffer = BytesIO()
                 segment.export(buffer, format="wav")
                 buffer.seek(0)
@@ -78,13 +78,14 @@ class TranscriptionHandler:
                 embedding = self.inference(buffer)
                 embeddings.append(embedding)
 
-            # חישוב דמיון בין כל הזוגות האפשריים
+                # Compute similarity between all possible pairs
             similarities = [
                 1 - cosine(embeddings[i], embeddings[j])
                 for i in range(num_segments) for j in range(i + 1, num_segments)
             ]
+
             if similarities:
-                print("mean_similarities-",np.mean(similarities))
+                print("mean_similarities-", np.mean(similarities))
             return np.mean(similarities) if similarities else None
 
         except Exception as e:
@@ -126,7 +127,7 @@ class TranscriptionHandler:
 
             if min_distance < self.threshold_closest:
                 speaker_label = closest_speaker
-            elif similarity_score and similarity_score < self.threshold_similarity:
+            elif not similarity_score or similarity_score < self.threshold_similarity:
                 speaker_label = f"unknown_{len(self.unknown_embeddings)}"
                 self.unknown_embeddings[speaker_label] = embedding  # Store unknown embedding
             else:
@@ -134,12 +135,20 @@ class TranscriptionHandler:
                 self.embeddings[speaker_label] = embedding
                 self.speakers.append(speaker_label)
                 self.speaker_count += 1
+                if len(self.unknown_segments) > 0:
+                    reclassified_unknowns =  self.reclassify_unknown_speakers()
+                    if len(reclassified_unknowns) > 0:
+                        for segment in self.full_transcription:
+                            segment["speaker"] = reclassified_unknowns.get(segment["speaker"], segment["speaker"])
+
         return speaker_label
 
 
     def reclassify_unknown_speakers(self):
         """Reassigns unknown speakers once new speakers are detected."""
-        reclassified_segments = []
+        if len(self.unknown_segments) < 1:
+            return []
+        reclassified_segments = {}
         remaining_unknown_segments = []
 
         for segment in self.unknown_segments:
@@ -148,10 +157,9 @@ class TranscriptionHandler:
 
             if min_distance < self.threshold_closest:
                 segment["speaker"] = closest_speaker
-                reclassified_segments.append(segment)
+                reclassified_segments[segment["speaker"]] = closest_speaker
             else:
                 remaining_unknown_segments.append(segment)
-
         self.unknown_segments = remaining_unknown_segments
         return reclassified_segments
 
@@ -198,7 +206,7 @@ class TranscriptionHandler:
             "model": "whisper-1",
             "language": self.language,
             "response_format": "verbose_json",
-            "temperature": 0.1,
+            "temperature": 0.0,
             "prompt": "This audio is a daily stand-up meeting of tech employees discussing software development, tasks, and progress. They mention code, deployments, bugs, sprints, and engineering challenges."
 
         }
@@ -310,6 +318,8 @@ class TranscriptionHandler:
         lines = names_string.split("\n")
         for line in lines:
             if line.strip():
+                if ":" not in line:
+                    continue
                 speaker, name = line.split(":", 1)
                 speaker = speaker.strip()
                 name = name.strip()
@@ -328,96 +338,103 @@ class TranscriptionHandler:
             formatted_transcription.append(f"{speaker}: {text}")
         return "\n".join(formatted_transcription)
 
-
-
-    def run(self, start_time = 0, end_time = 0,output_dir=GLOBALS.output_path):
+    def run(self, start_time=0, end_time=0, output_dir=GLOBALS.output_path):
+        """
+        Processes a short audio segment with a 10-second overlap for context.
+        """
         audio = AudioSegment.from_file(self.wav_path, format="wav")
-        if len(audio) / 1000 < 2:
-            chunk = audio
-        else:
-            chunk = audio[(int(start_time)- 20) * 1000:end_time * 1000]
-        # self.chunks.append(chunk)
 
-        json_transcription = self.transcribe_audio_with_whisper(chunk)
-        if not json_transcription:
+        # Ensure the start time includes 10 seconds of overlap (but not below 0)
+        start_ms = max(0, (start_time - 10) * 1000)
+        end_ms = end_time * 1000
+        chunk = audio[start_ms:end_ms]
+
+        # Skip processing if chunk is too short for Whisper
+        if len(chunk) < 2000:
+            print(f"❌ Segment {start_time}-{end_time} is too short, skipping...")
             return
 
-            # Step 4: Cluster speakers and process transcription with adjusted timestamps
+        print(f"🔹 Processing segment {start_time}-{end_time} (Length: {len(chunk) / 1000:.2f}s)")
+
+        # Step 1: Transcribe audio with Whisper
+        json_transcription = self.transcribe_audio_with_whisper(chunk)
+        if not json_transcription:
+            print("❌ json_transcription is None")
+            return
+
+        # Step 2: Process transcription with clustering
         transcription_with_clusters = self.process_transcription_with_clustering(json_transcription, chunk)
 
+        # Step 3: Handle unknown speakers and adjust timestamps
         for segment in transcription_with_clusters:
-            if int(segment["start"]) < 1 and  len(audio) / 1000 >= 2:
-                if int(segment["end"]) < 1:
+            # If the segment starts too early (within the 10s overlap), remove old duplicates
+            if int(segment["start"]) < 10 and start_time > 10:
+                if int(segment["end"]) <= 10:
                     continue
                 self.full_transcription.pop()
+
+            # Collect unknown speakers for later reclassification
             if segment["speaker"].startswith("unkno"):
-                self.unknown_segments.append( segment)  # Collect unknown segments
+                self.unknown_segments.append(segment)
 
-            self.full_transcription.append(segment)  # Add segments
+            # Store final transcription result
+            self.full_transcription.append(segment)
 
-
-            reclassified_unknowns = self.reclassify_unknown_speakers()
-
-            # Insert reclassified segments back into the full transcription in their original positions
-            for index, segment in reclassified_unknowns:
-                self.full_transcription.insert(index, segment)
-
-            # Step 4: Infer speaker names based on the updated transcription
-            text_transcription = str([{"speaker": seg["speaker"], "text": seg["text"]} for seg in
-                                  self.full_transcription])
-            inferred_names = self.infer_speaker_names(text_transcription)
-            self.names_context = inferred_names  # Update the context with the latest speaker names
-
-            # Step 5: Update transcription with inferred speaker names
+        # Step 4: Reclassify unknown speakers
+        reclassified_unknowns = self.reclassify_unknown_speakers()
+        if len(reclassified_unknowns) > 0:
             for segment in self.full_transcription:
-                speaker_label = segment['speaker']  # This is the initial "Speaker 1", "Speaker 2", etc.
-                speaker_name = inferred_names.get(speaker_label, segment['speaker'])
-                segment['speaker'] = speaker_name  # Update the transcription with the correct name
+                segment["speaker"] = reclassified_unknowns.get(segment["speaker"], segment["speaker"])
 
-        # Step 6: Save the final transcription with updated speaker names
+        # Step 5: Infer speaker names from context
+        text_transcription = " ".join([seg["text"] for seg in self.full_transcription])
+        inferred_names = self.infer_speaker_names(text_transcription)
+        self.names_context = inferred_names  # Update context with speaker names
+
+        for segment in self.full_transcription:
+            speaker_label = segment['speaker']
+            speaker_name = inferred_names.get(speaker_label, segment['speaker'])
+            segment['speaker'] = speaker_name  # Update transcription with real speaker names
+
+        # Step 6: Save updated transcription
         today = datetime.datetime.today().strftime('%d_%m_%y')
 
+        # Determine output file paths
         if self.output_file:
-            # If output_file ends with .json, use it for the JSON output file
             if self.output_file.endswith('.json'):
                 output_path_json = os.path.join(output_dir, self.output_file)
-                output_path_txt = os.path.join(output_dir, self.output_file.replace('.json',
-                                                                               '.txt'))  # Change the extension for the text file
+                output_path_txt = os.path.join(output_dir, self.output_file.replace('.json', '.txt'))
             elif self.output_file.endswith('.txt'):
                 output_path_txt = os.path.join(output_dir, self.output_file)
-                output_path_json = os.path.join(output_dir, self.output_file.replace('.txt',
-                                                                                '.json'))  # Change the extension for the JSON file
+                output_path_json = os.path.join(output_dir, self.output_file.replace('.txt', '.json'))
             else:
-                # If no extension or a different one, use default names
                 output_path_json = os.path.join(output_dir, f"transcription_{today}.json")
                 output_path_txt = os.path.join(output_dir, f"transcription_{today}.txt")
         else:
-            # If no output_file is provided, use default names for both
             output_path_json = os.path.join(output_dir, f"transcription_{today}.json")
             output_path_txt = os.path.join(output_dir, f"transcription_{today}.txt")
 
-            # Ensure output directory exists
+        # Ensure output directory exists
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-            # Save the final transcription with all speaker names updated in JSON format
+        # Save transcription to JSON
         with open(output_path_json, "w", encoding="utf-8") as f:
             json.dump(self.full_transcription, f, ensure_ascii=False, indent=4)
 
-        print(f"Transcription saved to {output_path_json}")
+        print(f"✅ Transcription saved to {output_path_json}")
 
-        # Read the JSON file and prepare the transcription in text format
+        # Convert transcription to text format and save
         with open(output_path_json, 'r') as f:
             full_transcription_json = json.load(f)
             full_transcription_txt = self.prepare_transcription(full_transcription_json)
 
-        # Save the transcription as a text file
         with open(output_path_txt, "w", encoding="utf-8") as f:
             f.write(full_transcription_txt)
 
-        print(f"Text transcription saved to {output_path_txt}")
-        return output_path_json, output_path_txt
+        print(f"✅ Text transcription saved to {output_path_txt}")
 
+        return output_path_json, output_path_txt
 
     def run_all_file(self,wav_path = None,output_dir=GLOBALS.output_path):
         if wav_path:
@@ -447,25 +464,24 @@ class TranscriptionHandler:
                 # Collect unknown segments
         # Insert reclassified segments back into the full transcription in their original positions
 
-            # Step 4: Infer speaker names based on the updated transcription
-            text_transcription = " ".join([seg["text"] for seg in self.full_transcription])
-            inferred_names = self.infer_speaker_names(text_transcription)
-            self.names_context = inferred_names  # Update the context with the latest speaker names
-
-
-            # Step 5: Update transcription with inferred speaker names
-            for segment in self.full_transcription:
-                speaker_label = segment['speaker']  # This is the initial "Speaker 1", "Speaker 2", etc.
-                speaker_name = inferred_names.get(speaker_label, segment['speaker'])  # Retrieve the actual name
-                print("speaker_name-",speaker_name)
-                segment['speaker'] = speaker_name  # Update the transcription with the correct name
-
-
         reclassified_unknowns = self.reclassify_unknown_speakers()
-        for index, segment in reclassified_unknowns:
-            self.full_transcription.insert(index, segment)
+        if len(reclassified_unknowns) > 0:
+            for segment in self.full_transcription:
+                segment["speaker"] = reclassified_unknowns.get(segment["speaker"], segment["speaker"])
 
-            # Step 6: Save the final transcription with updated speaker names
+        # Step 4: Infer speaker names based on the updated transcription
+        text_transcription = " ".join([seg["text"] for seg in self.full_transcription])
+        inferred_names = self.infer_speaker_names(text_transcription)
+        self.names_context = inferred_names  # Update the context with the latest speaker names
+
+        # Step 5: Update transcription with inferred speaker names
+        for segment in self.full_transcription:
+            speaker_label = segment['speaker']  # This is the initial "Speaker 1", "Speaker 2", etc.
+            speaker_name = inferred_names.get(speaker_label, segment['speaker'])  # Retrieve the actual name
+            print("speaker_name-",speaker_name)
+            segment['speaker'] = speaker_name  # Update the transcription with the correct name
+
+           # Step 6: Save the final transcription with updated speaker names
         today = datetime.datetime.today().strftime('%d_%m_%y')
 
         if self.output_file:
@@ -514,4 +530,12 @@ if __name__ == "__main__":
     # audio = AudioSegment.from_file(f"{file}.mp4", format="mp4")
     # audio.export(f"{file}.wav", format="wav")
     test = TranscriptionHandler(file)
-    test.run_all_file()
+    overlap = 10  # Keep 10 seconds of overlap for context
+    chunk_size = 15  # Process 15-second chunks
+    total_duration = 80  # Example full audio length
+
+    for i in range(0, total_duration, chunk_size - overlap):
+        start_time = max(0, i - overlap)
+        end_time = min(start_time + chunk_size, total_duration)
+        print(f"\n🔹 Processing segment {start_time}-{end_time}")
+        test.run(start_time, end_time)
