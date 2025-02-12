@@ -8,6 +8,7 @@ from io import BytesIO
 from pyannote.audio import Model
 from pyannote.audio import Inference, Audio
 # from pyannote.core import Segment
+import time
 
 from dotenv import load_dotenv
 import tiktoken
@@ -15,6 +16,7 @@ from globals import GLOBALS
 import io
 import numpy as np
 from tqdm import tqdm
+import librosa
 
 
 class TranscriptionHandler:
@@ -41,6 +43,77 @@ class TranscriptionHandler:
         self.full_transcription = []
         self.unknown_segments = []
         self.unknown_embeddings = {}
+        self.segment_length = 2 * 1000
+        self.num_segments = 3
+
+    def remove_silent_parts(self, audio_data, threshold, margin): # Takes audio data and sample rate
+        """Removes silent parts from audio data (NumPy array)."""
+        try:
+            frame_length = 512
+            hop_length = frame_length // 4
+            rms = librosa.feature.rms(y=audio_data, frame_length=frame_length, hop_length=hop_length)[0]
+            db = librosa.amplitude_to_db(rms + 1e-10)
+            silent_frames = np.where(db < np.mean(db) + threshold)[0]
+            silent_frames_expanded = []
+            for frame in silent_frames:
+                silent_frames_expanded.extend(range(max(0, frame - margin // hop_length), min(len(db), frame + margin // hop_length)))
+            silent_frames_expanded = sorted(list(set(silent_frames_expanded)))
+
+            mask = np.ones_like(db, dtype=bool)
+            mask[silent_frames_expanded] = False
+
+            non_silent_indices = []
+            for i in range(len(mask)):
+                if mask[i]:
+                    start = i * hop_length
+                    end = min((i + 1) * hop_length, len(audio_data))
+                    non_silent_indices.extend(range(start, end))
+            cleaned_audio = audio_data[np.array(non_silent_indices)]
+
+            return cleaned_audio
+
+        except Exception as e:
+            print(f"Error processing audio: {e}")
+            return None
+
+
+
+    def load_and_clean_audio(self, chunk_duration=800, threshold=-10, margin=500):  # Add chunk_duration
+        """Loads, cleans audio in chunks, and returns a combined AudioSegment."""
+        try:
+            audio_segment = AudioSegment.from_file(f"{self.wav_path}.wav")
+            sr = audio_segment.frame_rate
+            total_duration = len(audio_segment)  # in milliseconds
+            cleaned_audio_chunks = []
+
+            for start in tqdm(range(0, total_duration, chunk_duration * 1000), desc="Processing audio chunks"):
+                end = min(start + chunk_duration * 1000, total_duration)
+                chunk = audio_segment[start:end]
+
+                samples = np.array(chunk.get_array_of_samples(), dtype=np.int16)
+                cleaned_samples = self.remove_silent_parts(samples, threshold, margin)
+
+                if cleaned_samples is not None:
+                    cleaned_chunk = AudioSegment(
+                        cleaned_samples.tobytes(),
+                        frame_rate=sr,
+                        sample_width=chunk.sample_width,
+                        channels=chunk.channels
+                    )
+                    cleaned_audio_chunks.append(cleaned_chunk)
+
+            # Concatenate the cleaned chunks back together
+            if cleaned_audio_chunks:
+                cleaned_audio_segment = cleaned_audio_chunks[0]
+                for chunk in cleaned_audio_chunks[1:]:
+                    cleaned_audio_segment += chunk
+                return cleaned_audio_segment
+            else:
+                return None
+
+        except Exception as e:
+            print(f"Error loading or cleaning audio: {e}")
+            return None
 
     def load_model(self):
         """Load the PyAnnotemodel for embeddings."""
@@ -54,20 +127,17 @@ class TranscriptionHandler:
         :param audio: Audio signal (numpy array).
         :return: Mean similarity score between segments (float) or None if insufficient data.
         """
-        sr = 1000  # Sampling at 1000Hz (ensure this is correct)
-        segment_length = 2 * sr  # 2 seconds in samples
-        num_segments = 3  # 6 seconds split into 3 segments of 2 seconds
 
         # Ensure there is enough data
-        if len(audio) < num_segments * segment_length:
+        if len(audio) < self.num_segments * self.segment_length:
             return None
 
         embeddings = []
 
         try:
-            for i in range(num_segments):
-                start = i * segment_length
-                end = (i + 1) * segment_length
+            for i in range(self.num_segments):
+                start = i * self.segment_length
+                end = (i + 1) * self.segment_length
                 segment = audio[start:end]
 
                 # Convert to a file-like object in memory (BytesIO)
@@ -81,7 +151,7 @@ class TranscriptionHandler:
                 # Compute similarity between all possible pairs
             similarities = [
                 1 - cosine(embeddings[i], embeddings[j])
-                for i in range(num_segments) for j in range(i + 1, num_segments)
+                for i in range(self.num_segments) for j in range(i + 1, self.num_segments)
             ]
 
             if similarities:
@@ -460,17 +530,20 @@ class TranscriptionHandler:
     def run_all_file(self,wav_path = None,output_dir=GLOBALS.output_path):
         if wav_path:
             self.wav_path = wav_path
-        audio = AudioSegment.from_file(self.wav_path, format="wav")
+        audio = self.load_and_clean_audio(self.wav_path)
         audio_chunks = self.split_audio_if_needed(audio)
 
 
         # start_time = 0  # Track the start time of each chunk in the original file
         for chunk in tqdm(audio_chunks, desc="processing chunks..."):
+            start = time.time()
             # Step 2: Transcribe audio
             json_transcription = self.transcribe_audio_with_whisper(chunk)
             if not json_transcription:
                 continue
-
+            transcribe_duration = time.time() - start
+            print(f"{transcribe_duration=}")
+            start = time.time()
             # # Step 3: Adjust timestamps to match the original audio
             # for segment in json_transcription["segments"]:
             #     segment["start"] += start_time
@@ -481,7 +554,8 @@ class TranscriptionHandler:
                     self.unknown_segments.append(segment)  # Collect unknown segments
 
                 self.full_transcription.append(segment)  # Add segments
-
+            process_duration = time.time() - start
+            print(f"{process_duration=}")
                 # Collect unknown segments
         # Insert reclassified segments back into the full transcription in their original positions
 
@@ -490,17 +564,17 @@ class TranscriptionHandler:
             for segment in self.full_transcription:
                 segment["speaker"] = reclassified_unknowns.get(segment["speaker"], segment["speaker"])
 
-        # Step 4: Infer speaker names based on the updated transcription
-        text_transcription = " ".join([seg["text"] for seg in self.full_transcription])
-        inferred_names = self.infer_speaker_names(text_transcription)
-        self.names_context = inferred_names  # Update the context with the latest speaker names
+        # # Step 4: Infer speaker names based on the updated transcription
+        # text_transcription = " ".join([seg["text"] for seg in self.full_transcription])
+        # inferred_names = self.infer_speaker_names(text_transcription)
+        # self.names_context = inferred_names  # Update the context with the latest speaker names
 
-        # Step 5: Update transcription with inferred speaker names
-        for segment in self.full_transcription:
-            speaker_label = segment['speaker']  # This is the initial "Speaker 1", "Speaker 2", etc.
-            speaker_name = inferred_names.get(speaker_label, segment['speaker'])  # Retrieve the actual name
-            print("speaker_name-",speaker_name)
-            segment['speaker'] = speaker_name  # Update the transcription with the correct name
+        # # Step 5: Update transcription with inferred speaker names
+        # for segment in self.full_transcription:
+        #     speaker_label = segment['speaker']  # This is the initial "Speaker 1", "Speaker 2", etc.
+        #     speaker_name = inferred_names.get(speaker_label, segment['speaker'])  # Retrieve the actual name
+        #     print("speaker_name-",speaker_name)
+        #     segment['speaker'] = speaker_name  # Update the transcription with the correct name
 
            # Step 6: Save the final transcription with updated speaker names
         today = datetime.datetime.today().strftime('%d_%m_%y')
@@ -546,7 +620,7 @@ class TranscriptionHandler:
         print(f"Text transcription saved to {output_path_txt}")
         return output_path_json, output_path_txt
 if __name__ == "__main__":
-    file = "../meeting/audio1725163871.wav"
+    file = "../meeting/GMT20250205-100017_Recording.wav"
     # Convert MP4 to WAV
     # audio = AudioSegment.from_file(f"{file}.mp4", format="mp4")
     # audio.export(f"{file}.wav", format="wav")
