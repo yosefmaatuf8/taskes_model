@@ -1,0 +1,89 @@
+Trello Board Functions
+add_label(name, color) – Add a label to a board.
+add_list(name, pos=None) – Add a new list to a board.
+add_member(member, member_type='normal') – Add a member to the board.
+admin_members() – Retrieve all admin members of a board.
+all_cards() – Get all cards on a board.
+all_lists() – Get all lists on a board.
+all_members() – Get all members of a board.
+closed_cards() – Get all closed cards on a board.
+closed_lists() – Get all closed lists on a board.
+fetch_actions(action_filter, action_limit=50, before=None, since=None) – Fetch board actions with filters.
+get_cards(filters=None, card_filter='') – Get filtered cards from a board.
+get_checklists(cards='all') – Get all checklists on a board.
+get_labels(fields='all', limit=50) – Retrieve labels from a board.
+get_last_activity() – Get the timestamp of the last action on the board.
+get_list(list_id) – Retrieve a specific list from a board.
+get_lists(list_filter) – Get lists based on a filter.
+get_members(filters=None) – Retrieve members with filters.
+list_lists(list_filter='all') – Get lists matching a filter.
+normal_members() – Retrieve all normal board members.
+open_cards() – Get all open cards on a board.
+open_lists() – Get all open lists on a board.
+owner_members() – Get all board owners.
+remove_member(member) – Remove a member from a board.
+set_description(desc) – Set the board description.
+set_name(name) – Rename the board.
+Trello Card Functions
+add_checklist(title, items, itemstates=None) – Add a checklist to a card.
+add_label(label) – Attach a label to a card.
+add_member(member) – Assign a member to a card.
+assign(member_id) – Assign a member by ID.
+attach(name=None, mimeType=None, file=None, url=None) – Add an attachment (file or URL).
+change_board(board_id, list_id=None) – Move a card to another board.
+change_list(list_id) – Move a card to another list.
+comment(comment_text) – Add a comment to a card.
+fetch(eager=True) – Fetch card details.
+fetch_actions(action_filter='createCard', since=None, before=None) – Fetch card actions.
+fetch_attachments(force=False) – Retrieve card attachments.
+fetch_checklists() – Get checklists associated with a card.
+fetch_comments(force=False, limit=None) – Get all comments on a card.
+get_attachments() – Get all attachments on a card.
+get_comments() – Alias for fetching comments.
+get_list() – Get the list a card belongs to.
+remove_attachment(attachment_id) – Remove an attachment by ID.
+remove_due() – Remove a due date from a card.
+remove_label(label) – Remove a label from a card.
+remove_member(member) – Unassign a member from a card.
+set_closed(closed) – Archive or unarchive a card.
+set_description(description) – Set the card description.
+set_due(due) – Set a due date.
+set_name(new_name) – Rename the card.
+set_pos(pos) – Change card position in a list.
+Trello Checklist Functions
+add_checklist_item(name, checked=False) – Add an item to a checklist.
+clear() – Remove all items from a checklist.
+delete() – Delete a checklist.
+delete_checklist_item(name) – Remove an item from a checklist.
+rename(new_name) – Rename a checklist.
+rename_checklist_item(name, new_name) – Rename an item within a checklist.
+set_checklist_item(name, checked) – Mark an item as checked/unchecked.
+Trello List Functions
+add_card(name, desc=None, labels=None, due='null', source=None, position=None, assign=None) – Add a card to a list.
+archive_all_cards() – Archive all cards in a list.
+fetch() – Fetch details for a list.
+list_cards(card_filter='open', actions=None) – Get all cards from a list.
+move(position) – Move a list within the board.
+move_all_cards(destination_list) – Move all cards to another list.
+set_name(name) – Rename a list.
+set_pos(position) – Change the position of a list.
+Trello Organization Functions
+all_boards() – Retrieve all boards in an organization.
+fetch() – Fetch organization details.
+get_board(field_name) – Get a board by field name.
+get_boards(list_filter) – Get boards using a filter.
+get_members() – Get members of the organization.
+Trello API Client Functions
+add_board(board_name, source_board=None, organization_id=None, permission_level='private') – Create a new board.
+create_hook(callback_url, id_model, desc=None, token=None) – Create a webhook.
+fetch_json(uri_path, http_method='GET', headers=None, query_params=None, post_args=None, files=None) – Fetch JSON data from the Trello API.
+get_board(board_id) – Get a board by ID.
+get_card(card_id) – Get a card by ID.
+get_label(label_id, board_id) – Retrieve a label by ID.
+get_list(list_id) – Get a list by ID.
+get_member(member_id) – Retrieve a member by ID.
+get_organization(organization_id) – Get an organization by ID.
+list_boards(board_filter='all') – Get all boards for the user.
+list_organizations() – Get all organizations for the user.
+logout() – Log out from Trello.
+search(query, partial_match=False, models=[], board_ids=[], org_ids=[], card_ids=[]) – Search for Trello objects.
