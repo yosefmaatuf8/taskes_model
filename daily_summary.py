@@ -79,4 +79,4 @@ if __name__ == "__main__":
     to_emails = ["yosefmaatuf848@gmail.com"]
 
     summary_tool = DailySummary(sender_email, sender_password)
-    summary_tool.process_and_notify(transcription, to_emails)
+    summary_tool.process_and_notify(transcription)

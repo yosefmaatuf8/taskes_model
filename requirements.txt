@@ -1,0 +1,38 @@
+# AWS S3 operations (used for uploading recordings, etc.)
+boto3>=1.14.0
+
+# Loads environment variables from a .env file
+python-dotenv>=0.15.0
+
+# Audio processing and manipulation (e.g., converting audio formats, slicing audio)
+pydub>=0.24.0
+
+# OpenAI API integration (used for transcription, summarization, task extraction, etc.)
+openai>=0.27.0
+
+# Tokenizer for working with large language models like GPT-4
+tiktoken>=0.2.0
+
+# Library for making HTTP requests
+requests>=2.25.1
+
+# Numerical computing library
+numpy>=1.20.0
+
+# Scientific computing library for distance metrics and more
+scipy>=1.6.0
+
+# Progress bar for loops (e.g., processing audio chunks)
+tqdm>=4.50.0
+
+# Audio diarization and embeddings
+pyannote.audio>=2.1.1
+
+# Data analysis and manipulation (e.g., reading/writing CSV files)
+pandas>=1.2.0
+
+# Machine learning framework (required by some modules)
+tensorflow>=2.6.0
+
+# Data serialization and validation library
+marshmallow>=3.0.0
