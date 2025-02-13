@@ -18,29 +18,26 @@ class ExtractTasks:
         self.trello_api = trello_api
         GLOBALS.list_tasks = self.trello_api.get_all_card_details()
         self.list_tasks = str(GLOBALS.list_tasks)
-        self.users_names = self.trello_api.get_usernames()
+        self.users_names = GLOBALS.user_name_trello
         self.functions_dict = GLOBALS.functions_dict
         self.max_tokens = int(GLOBALS.max_tokens)
         self.transcription = transcription
 
-    def prepare_transcription(self):
-        """Prepare transcription as a JSON string with 'speaker' and 'text' pairs."""
-        formatted_transcription = []
-        for entry in self.transcription:
-            speaker = entry.get("speaker", "Unknown")
-            text = entry.get("text", "")
-            formatted_transcription.append({"speaker": speaker, "text": text})
-
-        # Convert the list to a JSON string
-        return json.dumps(formatted_transcription, ensure_ascii=False)
+    # def prepare_transcription(self):
+    #     """Prepare transcription as a JSON string with 'speaker' and 'text' pairs."""
+    #     formatted_transcription = []
+    #     for entry in self.transcription:
+    #         speaker = entry.get("speaker", "Unknown")
+    #         text = entry.get("text", "")
+    #         formatted_transcription.append({"speaker": speaker, "text": text})
+    #
+    #     # Convert the list to a JSON string
+    #     return json.dumps(formatted_transcription, ensure_ascii=False)
 
     def generate_tasks(self):
         """Main function to generate tasks from long transcriptions."""
-        # Get the transcription in JSON string format
-        formatted_transcription = self.prepare_transcription()
-
         # Check token size of transcription
-        transcription_tokens = len(self.tokenizer.encode(formatted_transcription))
+        transcription_tokens = len(self.tokenizer.encode(self.transcription))
         tasks_tokens = len(self.tokenizer.encode(json.dumps(self.list_tasks)))
 
         tasks = []
@@ -48,7 +45,7 @@ class ExtractTasks:
         # Split transcription if needed
         if transcription_tokens + tasks_tokens > self.max_tokens:
             print("Transcription exceeds token limit. Splitting and creating tasks for chunks...")
-            chunks = self.split_text(formatted_transcription,
+            chunks = self.split_text(self.transcription,
                                      self.max_tokens - 1200 - tasks_tokens)  # Leave room for prompt tokens
 
             for i, chunk in enumerate(chunks):
@@ -60,7 +57,7 @@ class ExtractTasks:
         else:
             # Extract tasks from the summarized transcription
             print("Extracting tasks from transcription...")
-            task = self.extract_tasks(formatted_transcription)
+            task = self.extract_tasks(self.transcription)
             tasks.append(task)
             print(tasks)
         print("-" * 50)

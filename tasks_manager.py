@@ -4,27 +4,37 @@ from extract_tasks import ExtractTasks
 from trello_api import TrelloAPI
 from globals import GLOBALS
 from transcription_handler import TranscriptionHandler
+from init_project import InitProject
+from db_manager import DBManager
 import json
 
 
 class TasksManager:
-    def __init__(self,
+    def __init__(self,wav_path = None,
                  sender_email =GLOBALS.sender_email,
                  sender_password = GLOBALS.sender_password):
         """Initialize the Main class and prepare transcription handling."""
         self.transcription_txt = None
-        self.mp3_path = None
+        self.wav_path = wav_path
+        self.db_manager = DBManager()
         self.audio_handler = None
         self.transcription_handler = None
+        self.transcription_for_ask_model = None
         self.transcription_json = None  # To store the transcription content
         self.extract_tasks = None  # To process transcription tasks
         self.tasks = None
-        self.trello_api = None
+        self.trello_api = TrelloAPI()
+        GLOBALS.user_name_trello = self.trello_api.get_usernames()
+        print("user_name:",GLOBALS.user_name_trello)
         # self.to_emails = to_emails  # Load email recipients from globals
         self.summary_model = DailySummary(sender_email, sender_password)  # Initialize email sender
         self.summary = None  # Placeholder for the generated summary
-        self.transcription_handler_chunk = TranscriptionHandler()
+        self.transcription_handler = TranscriptionHandler(wav_path)
 
+        if not self.db_manager.db_tasks_path and not self.db_manager.db_users_path:
+            init_project = InitProject()
+            rows_users, rows_tasks = init_project.generate_db_rows()
+            self.db_manager.create_db(rows_users, rows_tasks)
 
     def process_transcription(self,mp3_path):
         self.transcription_handler = TranscriptionHandler(mp3_path)
@@ -43,12 +53,12 @@ class TasksManager:
 
     def process_extract(self):
         """Process the transcription and generate tasks."""
-        if not self.transcription_json:
+        if not self.transcription_for_ask_model:
             print("Error: No transcription text available for processing.")
             return None
 
         # Initialize the transcription handler and generate tasks
-        self.extract_tasks = ExtractTasks(self.transcription_json, self.trello_api)
+        self.extract_tasks = ExtractTasks(self.transcription_for_ask_model, self.trello_api)
         tasks = self.extract_tasks.generate_tasks()
         print("Tasks generated successfully.")
         return tasks
@@ -149,19 +159,29 @@ class TasksManager:
             except Exception as e:
                 print(f"Error executing task {task}: {e}")
 
-    def ran_on_chunk(self, chunk):
-        transcription = self.transcription_handler_chunk.run(chunk)
-        print(transcription)
+    def ran_for_chunks(self, start_time=0, end_time=0):
+        if not os.path.exists(self.wav_path):
+            print("Aborting: No wav_path found.")
+            return
+        self.transcription_for_ask_model = self.transcription_handler.run(start_time, end_time)
+        self.tasks = self.process_extract()
+        print(self.tasks)
+        ask_model = None # create funk for ask model obout tasks
+        pass
 
-    def run(self,mp3_path=None):
+    def stop_transcription(self):
+        self.transcription_txt = self.transcription_handler.output_path_txt
+        self.transcription_json = self.transcription_handler.output_path_json
+        self.run_all()
+
+    def run_all(self):
         """Run the main workflow."""
-        self.trello_api = TrelloAPI()
-        if not os.path.exists(mp3_path):
-            print("Aborting: No mp3_path found.")
+        if not os.path.exists(self.wav_path):
+            print("Aborting: No wav_path found.")
             return
 
         print("Processing transcription...")
-        self.transcription_json, self.transcription_txt = self.process_transcription(mp3_path)
+        self.transcription_json, self.transcription_txt = self.process_transcription(self.wav_path)
         self.read_transcription()  # Read transcription from file
 
 
@@ -177,5 +197,5 @@ class TasksManager:
 
 if __name__ == "__main__":
     test = TasksManager()
-    test.run()
+    # test.run()
 

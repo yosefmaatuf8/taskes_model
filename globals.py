@@ -19,13 +19,14 @@ class Globals:
         # self.model_diarization = self.validate_env("MODEL_DIARIZATION")
         self.language = "he"
         self.list_tasks = None
-
+        self.users_name_trello = None
         self.stream_url = self.validate_env("STREAM_URL")
         self.bucket_name = self.validate_env("BUCKET_NAME")
         self.aws_access_key_id= self.validate_env("AWS_ACCESS_KEY_ID")
         self.aws_secret_access_key = self.validate_env("AWS_SECRET_ACCESS_KEY")
-        self.chunk_interval = self.validate_env("CHUNK_INTERVAL")
-        self.silence_timeout = self.validate_env("SILENCE_TIMEOUT")
+        self.chunk_interval = int(self.validate_env("CHUNK_INTERVAL"))
+        self.silence_timeout = int(self.validate_env("SILENCE_TIMEOUT"))
+
     def validate_env(self, var_name):
         """Validate that the environment variable is set."""
         value = os.getenv(var_name)

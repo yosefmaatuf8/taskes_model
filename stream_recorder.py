@@ -7,14 +7,16 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from globals import GLOBALS
-# Import the MeetingAnalyzer module
-from transcription_handler import TranscriptionHandler
-
+from transcription_handler import TranscriptionHandler  # Real-time transcription
 
 
 class StreamRecorder:
-    def __init__(self, stream_url=GLOBALS.stream_url, bucket_name=GLOBALS.bucket_name, aws_access_key_id=GLOBALS.aws_access_key_id, aws_secret_access_key=GLOBALS.aws_secret_access_key,
+    def __init__(self, stream_url=GLOBALS.stream_url, bucket_name=GLOBALS.bucket_name,
+                 aws_access_key_id=GLOBALS.aws_access_key_id, aws_secret_access_key=GLOBALS.aws_secret_access_key,
                  chunk_interval=GLOBALS.chunk_interval, silence_timeout=GLOBALS.silence_timeout, region_name='us-east-1'):
+        self.meeting_start_time = None
+        self.meeting_start_time_peth = None
+        self.last_chunk_time = None
         self.meeting_analyzer = None
         self.stream_url = stream_url
         self.chunk_interval = chunk_interval
@@ -62,11 +64,13 @@ class StreamRecorder:
             os.rmdir(self.output_dir)
 
     def setup_new_meeting(self):
-        self.meeting_start_time = datetime.now()
-        self.output_dir = f"meeting_{self.meeting_start_time.strftime('%Y%m%d_%H%M%S')}"
+        self.meeting_start_time = time.time()
+        self.last_chunk_time = time.time()
+        self.meeting_start_time_peth = datetime.now()
+        self.output_dir = f"meeting_{self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')}"
         os.makedirs(self.output_dir, exist_ok=True)
         self.full_recording_path = os.path.join(self.output_dir, "full_meeting.wav")
-        self.meeting_analyzer = TranscriptionHandler(self.output_dir)
+        self.meeting_analyzer = TranscriptionHandler(self.full_recording_path,self.output_dir)  # Initialize the transcription handler with the full file
 
     def check_audio_activity(self, audio_chunk):
         if not audio_chunk:
@@ -104,7 +108,9 @@ class StreamRecorder:
             consecutive_silence_chunks = 0
             audio_activity_detected = False
             buffer = bytearray()
-            chunk_start_time = time.time()
+            # Ensure proper initialization of time-related variables
+
+            # Inside the main loop:
 
             try:
                 while True:
@@ -117,6 +123,8 @@ class StreamRecorder:
                     has_activity = self.check_audio_activity(audio_chunk)
 
                     if has_activity:
+
+
                         consecutive_silence_chunks = 0
                         if not self.recording_started and not audio_activity_detected:
                             audio_activity_detected = True
@@ -131,11 +139,12 @@ class StreamRecorder:
                             wav_file.setframerate(16000)
                             self.recording_started = True
                             last_active_audio = time.time()
+
                     else:
                         consecutive_silence_chunks += 1
 
                     if self.recording_started:
-                        wav_file.writeframes(audio_chunk)
+                        wav_file.writeframes(audio_chunk)  # Append to the full recording file
                         buffer.extend(audio_chunk)
 
                         if has_activity:
@@ -154,20 +163,30 @@ class StreamRecorder:
                             audio_activity_detected = False
                             break
 
-                        if time.time() - chunk_start_time >= self.chunk_interval:
-                            chunk_path = os.path.join(self.output_dir, f"chunk_{int(time.time())}.wav")
-                            with wave.open(chunk_path, 'wb') as chunk_file:
-                                chunk_file.setnchannels(1)
-                                chunk_file.setsampwidth(2)
-                                chunk_file.setframerate(16000)
-                                chunk_file.writeframes(buffer)
-                            buffer = bytearray()
-                            chunk_start_time = time.time()
-                            self.meeting_analyzer.run(chunk_path, chunk_start_time,
-                                                                time.time())
+                        current_time = time.time()  # Get current time
+
+
+                        # Check if the chunk interval has passed since the last chunk
+                        if current_time - self.last_chunk_time >= self.chunk_interval:
+                            # Calculate the start and end times of the chunk relative to the meeting start
+
+
+                            chunk_start_time = max(0.0, self.last_chunk_time - self.meeting_start_time)
+                            # print("self.last_chunk_time:",self.last_chunk_time,"self.meeting_start_time",self.meeting_start_time,)
+                            chunk_end_time = current_time - self.meeting_start_time
+
+                            # print("chunk_end_time",chunk_end_time,"chunk_start_time",chunk_start_time)
+                            # Update last_chunk_time to the current time after processing this chunk
+                            self.last_chunk_time = current_time
+
+                            # Send the start and end time to transcription
+                            self.meeting_analyzer.run(chunk_start_time, chunk_end_time)
 
                     if consecutive_silence_chunks > 50 and not self.recording_started:
                         audio_activity_detected = False
+
+                        # Update last_chunk_time to the current time after processing this chunk
+                          
 
             except Exception as e:
                 print(f"Error during recording: {e}")
@@ -180,7 +199,5 @@ class StreamRecorder:
 
 
 if __name__ == "__main__":
-    recorder = StreamRecorder(
-        )
-
+    recorder = StreamRecorder()
     recorder.monitor_and_record()
