@@ -190,7 +190,7 @@ class TranscriptionHandler:
             similarity_score = self.compute_similarity(audio_clip)
             if similarity_score and similarity_score > self.threshold_similarity:
                 speaker_label = f"speaker_{self.speaker_count}"
-                audio_clip[:6000].export(buffer, format="wav")
+                audio_clip[:self.num_segments * self.segment_length].export(buffer, format="wav")
                 buffer.seek(0)
                 embedding = self.inference(buffer)
                 self.embeddings[speaker_label] = embedding
@@ -217,7 +217,7 @@ class TranscriptionHandler:
 
         if similarity_score and similarity_score > self.threshold_similarity:
             speaker_label = f"speaker_{self.speaker_count}"
-            audio_clip[:6000].export(buffer, format="wav")
+            audio_clip[:self.num_segments * self.segment_length].export(buffer, format="wav")
             buffer.seek(0)
             embedding = self.inference(buffer)
             self.embeddings[speaker_label] = embedding
