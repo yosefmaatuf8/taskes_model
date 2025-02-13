@@ -353,7 +353,7 @@ class TranscriptionHandler:
         if "choices" not in response_json or not response_json["choices"]:
             print(f"Unexpected OpenAI response: {response_json}")
             return ""
-
+        print("response:  \n",response_json["choices"][0]["message"]["content"])
         return response_json["choices"][0]["message"]["content"]
 
     def parse_names(self, names_string, known_names):

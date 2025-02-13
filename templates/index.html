@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Real-Time Log Output</title>
+    <!-- Load a compatible Socket.IO client library from a CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.js"></script>
+    <script type="text/javascript">
+      document.addEventListener("DOMContentLoaded", function() {
+        // Connect to the Socket.IO server
+        var socket = io();
+
+        // Listen for 'log_message' events and append them to the log div
+        socket.on('log_message', function(msg) {
+          console.log("Log from server:", msg.data);  // Log to the browser console
+          var logDiv = document.getElementById('log');
+          logDiv.innerHTML += msg.data + '<br>';
+          logDiv.scrollTop = logDiv.scrollHeight;  // Auto-scroll to the latest log
+        });
+
+        // Handle connection errors
+        socket.on('connect_error', (error) => {
+          console.error("Connection error:", error);
+        });
+
+        socket.on('disconnect', () => {
+          console.warn("Disconnected from server");
+        });
+      });
+    </script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      #log {
+        background-color: #f0f0f0;
+        padding: 10px;
+        height: 400px;
+        overflow-y: scroll;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Real-Time Log Output</h1>
+    <div id="log"></div>
+  </body>
+</html>
