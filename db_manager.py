@@ -17,8 +17,8 @@ class DBManager:
         df_tasks = pd.DataFrame(rows_tasks)
         self.db_users_path = self.db_path+'/users.csv'
         self.db_tasks_path = self.db_path+'/tasks.csv'
-        df_users.to_csv(self.db_users_path)
-        df_tasks.to_csv( self.db_tasks_path)
+        df_users.to_csv(self.db_users_path,index=False)
+        df_tasks.to_csv( self.db_tasks_path, index=False)
 
     def writ_rows_to_db(self,type_db,rows):
         df = pd.read_csv(getattr(self, type_db))
@@ -36,7 +36,7 @@ class DBManager:
 
         df.to_csv(getattr(self, type_db), index=False)  # Save back to file
 
-    def read_from_db(self):
+    def read_from_db(self,type_db,id_row):
         pass
 
 

@@ -9,7 +9,8 @@ from pyannote.audio import Model
 from pyannote.audio import Inference, Audio
 import traceback
 import copy
-
+from utils import split_text
+from db_manager import DBManager
 from dotenv import load_dotenv
 import tiktoken
 from globals import GLOBALS
@@ -275,22 +276,6 @@ class TranscriptionHandler:
 
         return conversation
 
-    def split_text(self, text, max_tokens):
-        """Split text into chunks within the token limit."""
-        words = text.split()
-        chunks, current_chunk = [], []
-
-        for word in words:
-            if len(self.tokenizer.encode(" ".join(current_chunk + [word]))) > max_tokens:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = [word]
-            else:
-                current_chunk.append(word)
-
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-
-        return chunks
 
     def infer_speaker_names(self, transcription):
         """Uses GPT to infer real speaker names."""
@@ -299,7 +284,7 @@ class TranscriptionHandler:
         names_string = self.names_context
 
         if token_count > self.max_tokens:
-            chunks = self.split_text(transcription, self.max_tokens - 700)
+            chunks = split_text(transcription, self.max_tokens - 700)
             for chunk in chunks:
                 names_string = self.find_in_chunk(chunk, names_string)
                 known_names.update(self.parse_names(names_string, known_names))

@@ -6,7 +6,7 @@ import tiktoken
 # import requests
 # from io import BytesIO
 # from audio_handler import AudioHandler
-# from audio.task_manager import TaskManager
+from utils import split_text
 from globals import GLOBALS
 
 class ExtractTasks:
@@ -45,7 +45,7 @@ class ExtractTasks:
         # Split transcription if needed
         if transcription_tokens + tasks_tokens > self.max_tokens:
             print("Transcription exceeds token limit. Splitting and creating tasks for chunks...")
-            chunks = self.split_text(self.transcription,
+            chunks = split_text(self.transcription,
                                      self.max_tokens - 1200 - tasks_tokens)  # Leave room for prompt tokens
 
             for i, chunk in enumerate(chunks):
@@ -63,22 +63,7 @@ class ExtractTasks:
         print("-" * 50)
         return tasks
 
-    def split_text(self, text, max_tokens):
-        """Split text into chunks within the token limit."""
-        words = text.split()
-        chunks = []
-        current_chunk = []
 
-        for word in words:
-            if len(self.tokenizer.encode(" ".join(current_chunk + [word]))) > max_tokens:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = [word]
-            else:
-                current_chunk.append(word)
-
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-        return chunks
 
     def extract_tasks(self, formatted_transcription):
         """Extract tasks from the summarized transcription."""

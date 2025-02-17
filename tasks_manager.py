@@ -24,8 +24,9 @@ class TasksManager:
         self.extract_tasks = None  # To process transcription tasks
         self.tasks = None
         self.trello_api = TrelloAPI()
-        GLOBALS.user_name_trello = self.trello_api.get_usernames()
-        print("user_name:",GLOBALS.user_name_trello)
+        GLOBALS.users_name_trello = self.trello_api.get_usernames()
+        GLOBALS.id_users_name_trello = self.trello_api.get_id_and_usernames()
+        GLOBALS.list_tasks = self.trello_api.get_all_card_details()
         # self.to_emails = to_emails  # Load email recipients from globals
         self.summary_model = DailySummary(sender_email, sender_password)  # Initialize email sender
         self.summary = None  # Placeholder for the generated summary

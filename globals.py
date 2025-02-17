@@ -18,8 +18,11 @@ class Globals:
         self.output_path = self.validate_path("OUTPUT_PATH")
         # self.model_diarization = self.validate_env("MODEL_DIARIZATION")
         self.language = "he"
+
         self.list_tasks = None
         self.users_name_trello = None
+        self.id_users_name_trello = None
+
         self.stream_url = self.validate_env("STREAM_URL")
         self.bucket_name = self.validate_env("BUCKET_NAME")
         self.aws_access_key_id= self.validate_env("AWS_ACCESS_KEY_ID")
