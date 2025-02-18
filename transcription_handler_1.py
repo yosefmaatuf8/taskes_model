@@ -14,6 +14,7 @@ from db_manager import DBManager
 from dotenv import load_dotenv
 import tiktoken
 from globals import GLOBALS
+from db_manager import DBManager
 import io
 import numpy as np
 from tqdm import tqdm
@@ -25,6 +26,7 @@ class TranscriptionHandler:
         self.output_dir = output_dir
         self.names_context = ''
         self.output_file = output_file
+        self.db_manager = DBManager()
         load_dotenv()
         self.openai_api_key = GLOBALS.openai_api_key
         self.users_name_trello = GLOBALS.users_name_trello
@@ -38,7 +40,10 @@ class TranscriptionHandler:
         self.output_path_json = None
         self.output_path_txt = None
         self.max_size = 10  # Maximum audio duration per segment in mb
-        self.embeddings = {}
+        if self.db_manager:
+            self.embeddings = self.db_manager.load_user_embeddings()
+        else:
+            self.embeddings = {}
         self.speakers = []
         self.speaker_count = 0
         self.least_chunk = 4
@@ -55,6 +60,7 @@ class TranscriptionHandler:
         """Load the PyAnnotemodel for embeddings."""
         model = Model.from_pretrained("pyannote/embedding", use_auth_token=self.huggingface_api_key)
         return Inference(model, window="whole")
+
 
 
     def compute_similarity(self, audio):
@@ -163,6 +169,8 @@ class TranscriptionHandler:
             print(f"add {speaker_label}")
             self.speakers.append(speaker_label)
             self.speaker_count += 1
+            if self.db_manager:
+                self.db_manager.save_user_embeddings(self.embeddings)
             if len(self.unknown_segments) > 0:
                 reclassified_unknowns = self.reclassify_unknown_speakers()
                 if len(reclassified_unknowns) > 0:

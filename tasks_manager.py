@@ -3,7 +3,8 @@ from daily_summary import DailySummary
 from extract_tasks import ExtractTasks
 from trello_api import TrelloAPI
 from globals import GLOBALS
-from transcription_handler import TranscriptionHandler
+from post_transcription_data_processor import PostTranscriptionDataProcessor, TranscriptClassifier
+from transcription_handler_1 import TranscriptionHandler
 from init_project import InitProject
 from db_manager import DBManager
 import json
@@ -15,6 +16,7 @@ class TasksManager:
                  sender_password = GLOBALS.sender_password):
         """Initialize the Main class and prepare transcription handling."""
         self.transcription_txt = None
+        self.transcriptClassifier = None
         self.wav_path = wav_path
         self.db_manager = DBManager()
         self.audio_handler = None
@@ -57,6 +59,7 @@ class TasksManager:
         if not self.transcription_for_ask_model:
             print("Error: No transcription text available for processing.")
             return None
+        self.transcriptClassifier = TranscriptClassifier(self.transcription_for_ask_model)
 
         # Initialize the transcription handler and generate tasks
         self.extract_tasks = ExtractTasks(self.transcription_for_ask_model, self.trello_api)
