@@ -86,7 +86,7 @@ class TranscriptionHandler:
             total_duration = len(audio_segment)  # in milliseconds
             cleaned_audio_chunks = []
 
-            for start in tqdm(range(0, total_duration, chunk_duration * 1000), desc="Processing audio chunks"):
+            for start in tqdm(range(0, total_duration, chunk_duration * 1000), desc="Remove silent audio chunks"):
                 end = min(start + chunk_duration * 1000, total_duration)
                 chunk = audio_segment[start:end]
 
@@ -154,8 +154,8 @@ class TranscriptionHandler:
                 for i in range(self.num_segments) for j in range(i + 1, self.num_segments)
             ]
 
-            if similarities:
-                print("mean_similarities-", np.mean(similarities))
+            # if similarities:
+                # print("mean_similarities-", np.mean(similarities))
             return np.mean(similarities) if similarities else None
 
         except Exception as e:
@@ -194,7 +194,7 @@ class TranscriptionHandler:
                 buffer.seek(0)
                 embedding = self.inference(buffer)
                 self.embeddings[speaker_label] = embedding
-                print(f"add {speaker_label}")
+                # print(f"add {speaker_label}")
                 self.speakers.append(speaker_label)
                 self.speaker_count += 1
                 if len(self.unknown_segments) > 0:
@@ -221,7 +221,7 @@ class TranscriptionHandler:
             buffer.seek(0)
             embedding = self.inference(buffer)
             self.embeddings[speaker_label] = embedding
-            print(f"add {speaker_label}")
+            # print(f"add {speaker_label}")
             self.speakers.append(speaker_label)
             self.speaker_count += 1
             if len(self.unknown_segments) > 0:
@@ -530,7 +530,7 @@ class TranscriptionHandler:
     def run_all_file(self,wav_path = None,output_dir=GLOBALS.output_path):
         if wav_path:
             self.wav_path = wav_path
-        audio = self.load_and_clean_audio(self.wav_path)
+        audio = self.load_and_clean_audio()
         audio_chunks = self.split_audio_if_needed(audio)
 
 
@@ -619,10 +619,105 @@ class TranscriptionHandler:
 
         print(f"Text transcription saved to {output_path_txt}")
         return output_path_json, output_path_txt
+
+    def evaluete(self, threshold_closest_values, threshold_similarity_values, segment_length_values, num_segments_values, wav_path = None,output_dir=GLOBALS.output_path):
+        if wav_path:
+            self.wav_path = wav_path
+        audio = self.load_and_clean_audio()
+        audio.export(f"{file}_clean.wav", format="wav")
+        audio_chunks = self.split_audio_if_needed(audio)
+
+        full_transcription_json = []
+        for chunk in tqdm(audio_chunks, desc="processing chunks..."):
+            # Step 2: Transcribe audio
+            json_transcription = self.transcribe_audio_with_whisper(chunk)
+            if not json_transcription:
+                continue
+            full_transcription_json.append(json_transcription)
+
+        # Ensure output directory exists
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        # Save initial JSON transcription (as before)
+        output_path_json = os.path.join(output_dir, f"transcription_{os.path.basename(self.wav_path)}.json")
+        with open(output_path_json, "w", encoding="utf-8") as f:
+            json.dump(full_transcription_json, f, ensure_ascii=False, indent=4)
+        print(f"Initial JSON transcription saved to {output_path_json}")
+
+        # Prepare and save initial text transcription (by SEGMENTS now)
+        output_path_txt = os.path.join(output_dir, f"transcription_{os.path.basename(self.wav_path)}.txt")
+        full_transcription_txt = self.prepare_transcription(full_transcription_json)  # Process by segments!
+        with open(output_path_txt, "w", encoding="utf-8") as f:
+            f.write(full_transcription_txt)
+        print(f"Initial text transcription saved to {output_path_txt}")
+
+        # Read the JSON file and prepare the transcription in text format
+        with open(output_path_json, 'r') as f:
+            full_transcription_json = json.load(f)
+            full_transcription_txt = self.prepare_transcription(full_transcription_json)
+
+        # Save the transcription as a text file
+        with open(output_path_txt, "w", encoding="utf-8") as f:
+            f.write(full_transcription_txt)
+
+        total_combinations = len(threshold_closest_values) * len(threshold_similarity_values) * len(segment_length_values) * len(num_segments_values)
+        with tqdm(total=total_combinations, desc="Evaluating all combinations") as pbar:
+            for tc in threshold_closest_values:
+                for ts in threshold_similarity_values:
+                    for sl in segment_length_values:
+                        for ns in num_segments_values:
+                            self.embeddings = {}
+                            self.speakers = []
+                            self.speaker_count = 0
+                            self.threshold_closest = tc
+                            self.threshold_similarity = ts
+                            self.segment_index = 0
+                            self.full_transcription = []
+                            self.unknown_segments = []
+                            self.unknown_embeddings = {}
+                            self.segment_length = sl * 1000
+                            self.num_segments = ns
+                            # Step 3: Adjust timestamps to match the original audio
+                            for json_transcription, chunk in zip(full_transcription_json, audio_chunks):
+                                transcription_with_clusters = self.process_transcription_with_clustering(json_transcription, chunk)
+                                for segment in transcription_with_clusters:
+                                    if segment["speaker"].startswith("unkno"):
+                                        self.unknown_segments.append(segment)  # Collect unknown segments
+
+                                    self.full_transcription.append(segment)  # Add segments
+
+
+                            reclassified_unknowns = self.reclassify_unknown_speakers()
+                            if len(reclassified_unknowns) > 0:
+                                for segment in self.full_transcription:
+                                    segment["speaker"] = reclassified_unknowns.get(segment["speaker"], segment["speaker"])
+
+                            # Save results for each combination
+                            output_filename = f"transcription_{os.path.basename(self.wav_path)}_tc{tc}_ts{ts}_sl{sl}_ns{ns}"
+                            output_path_json_combo = os.path.join(output_dir, f"{output_filename}.json")
+                            output_path_txt_combo = os.path.join(output_dir, f"{output_filename}.txt")
+
+                            with open(output_path_json_combo, "w", encoding="utf-8") as f:
+                                json.dump(self.full_transcription, f, ensure_ascii=False, indent=4)
+
+                            full_transcription_txt_combo = self.prepare_transcription(self.full_transcription)  # Use the updated transcription
+                            with open(output_path_txt_combo, "w", encoding="utf-8") as f:
+                                f.write(full_transcription_txt_combo)
+                            pbar.update(1)
+
+
 if __name__ == "__main__":
-    file = "../meeting/GMT20250205-100017_Recording.wav"
+    path = "GMT20250212-101444_Recording"
+    file = f"../meeting/{path}"
+    output_dir = f"../transcriptions/{path}"
+    # Define the ranges of values to test
+    threshold_closest_values = [0.7, 0.8, 0.9]
+    threshold_similarity_values = [0.1, 0.2, 0.3, 0.4, 0.5]
+    segment_length_values = [1, 2, 3, 4, 5]  # In seconds
+    num_segments_values = [2, 3, 4, 5]
     # Convert MP4 to WAV
-    # audio = AudioSegment.from_file(f"{file}.mp4", format="mp4")
-    # audio.export(f"{file}.wav", format="wav")
+    audio = AudioSegment.from_file(f"{file}.mp4", format="mp4")
+    audio.export(f"{file}.wav", format="wav")
     test = TranscriptionHandler(file)
-    test.run_all_file()
+    test.evaluete(threshold_closest_values, threshold_similarity_values, segment_length_values, num_segments_values, output_dir=output_dir)
