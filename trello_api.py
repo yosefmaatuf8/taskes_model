@@ -1,9 +1,10 @@
 from trello import TrelloClient
+from  globals import GLOBALS
 from dotenv import load_dotenv
 import os
 
 class TrelloAPI:
-    def __init__(self):
+    def __init__(self, trello_bord_id = None):
         # Load .env file
         load_dotenv()
         # Initialize Trello Client
@@ -13,7 +14,7 @@ class TrelloAPI:
                     token=os.getenv('TRELLO_API_TOKEN')
                 )
         # Replace these with actual IDs from your environment
-        self.board_id = os.getenv('TRELLO_BOARD_ID')
+        self.board_id = trello_bord_id or GLOBALS.bord_id_manager
 
 
     def get_user_id_by_username(self, username):
@@ -118,11 +119,24 @@ class TrelloAPI:
         board = self.client.get_board(self.board_id)
         members = board.get_members()
         # Build a list of (id, username)
-        id_usernames = [(member.id, member.username) for member in members]
+        id_usernames = [(member.id, member.username, member.full_name) for member in members]
         return id_usernames
 
+    def get_all_boards(self):
+        """
+        Retrieve all boards associated with the authenticated Trello user.
+        """
+        boards = self.client.list_boards()
+        boards_data = [{"id": board.id, "name": board.name, "url": board.url} for board in boards]
+        board = self.client.get_board("67b5d782eb0035bdd4bb8595")
+        member_id = "6784e27287787e02834fb651"
+        member = self.client.get_member(member_id)
+        board.add_member(member,"admin")
+
+        return boards_data
 # Run the example flow
 if __name__ == "__main__":
     # comment_on_card('Creating action items', 'comment')
-    print(TrelloAPI.get_all_card_details())
+    test =  TrelloAPI()
+    print(test.get_all_boards())
 

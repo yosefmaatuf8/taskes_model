@@ -50,14 +50,14 @@ class ExtractTasks:
 
             for i, chunk in enumerate(chunks):
                 print(f"Create tasks from chunk {i + 1}/{len(chunks)}...")
-                tasks_chunk = self.extract_tasks(chunk)
+                tasks_chunk = self.extract_tasks_for_trello(chunk)
                 print(tasks_chunk)
                 tasks.append(tasks_chunk)
 
         else:
             # Extract tasks from the summarized transcription
             print("Extracting tasks from transcription...")
-            task = self.extract_tasks(self.transcription)
+            task = self.extract_tasks_for_trello(self.transcription)
             tasks.append(task)
             print(tasks)
         print("-" * 50)
@@ -65,7 +65,7 @@ class ExtractTasks:
 
 
 
-    def extract_tasks(self, formatted_transcription):
+    def extract_tasks_for_trello(self, formatted_transcription):
         """Extract tasks from the summarized transcription."""
         functions_description = "\n".join(
             [f"{func}: {params}" for func, params in GLOBALS.functions_dict.items()]
@@ -112,7 +112,7 @@ class ExtractTasks:
             response = self.client.chat.completions.create(
                 model="gpt-4",
                 messages=messages,
-                temperature=0.3
+                temperature=0.2
             )
             return response.choices[0].message.content
         except Exception as e:

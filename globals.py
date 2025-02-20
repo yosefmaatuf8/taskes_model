@@ -19,6 +19,8 @@ class Globals:
         # self.model_diarization = self.validate_env("MODEL_DIARIZATION")
         self.language = "he"
 
+        self.bord_id_employees = self.validate_env("BORD_ID_EMPLOYEES")
+        self.bord_id_manager = self.validate_env("BORD_ID_MANAGER")
         self.list_tasks = None
         self.users_name_trello = None
         self.id_users_name_trello = None

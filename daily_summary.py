@@ -24,7 +24,7 @@ class DailySummary:
         self.from_email = self.sender_email
         self.transcription = None
 
-    def summarize(self, transcription: str, model: str = "gpt-3.5-turbo", max_tokens: int = 150) -> str:
+    def summarize(self, transcription: str,tasks=None, model: str = "gpt-3.5-turbo", max_tokens: int = 150) -> str:
         """
         """
         try:
@@ -33,7 +33,7 @@ class DailySummary:
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user",
-                     "content": f"Summarize the following meeting transcription concisely:\n\n{transcription}"}
+                     "content": f"Summarize the following meeting transcription concisely:\n\n{transcription} and is tasks {tasks}"}
                 ],
                 max_tokens=max_tokens,
                 temperature=0.5
@@ -64,10 +64,10 @@ class DailySummary:
         except Exception as e:
             print(f"Error sending email: {e}")
 
-    def process_and_notify(self, transcription: str, subject: str = "Daily Summary") -> None:
+    def process_and_notify(self, transcription: str,tasks=None, subject: str = "Daily Summary") -> None:
         """
         """
-        summary = self.summarize(transcription)
+        summary = self.summarize(transcription,tasks)
         self.send_email(subject, summary)
 
 

@@ -1,35 +1,67 @@
 import pandas as pd
 import os
 from db_manager import DBManager
+from trello_api import TrelloAPI
 import json
 from openai import OpenAI
 from globals import GLOBALS
 
+
 class TranscriptClassifier:
-    def __init__(self, transcription_data):
+    def __init__(self, transcription_data, trello_api = TrelloAPI()):
         self.transcription_data = transcription_data
         self.client = OpenAI(api_key=GLOBALS.openai_api_key)
+        self.trello_api = trello_api
+        self.run()
 
-    def classify_sentences(self):
+    def classify_and_extract(self):
         prompt = f"""
-        Classify each sentence in the following transcription into one of these categories:
-        - Task
-        - Update
-        - General
+        Perform a chain-of-thought analysis on the provided transcription:
+        1. Classify each sentence into: Task, Update, General.
+        2. For each classified sentence, extract necessary details (task description, responsible person, deadlines, etc.) where applicable.
+        3. Summarize the changes, new tasks, and updates discussed in the meeting.
 
-        Return a JSON array where each object contains 'sentence', 'speaker', 'category'.
+        Return a JSON with 'classified_sentences' (array of objects with 'sentence', 'speaker', 'category', 'details') and 'summary' with a high-level overview.
 
         Transcription:
         {json.dumps(self.transcription_data)}
         """
         response = self.client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "system", "content": "You classify sentences from transcripts."},
+            messages=[{"role": "system",
+                       "content": "You classify sentences from transcripts, extract details, and summarize updates."},
                       {"role": "user", "content": prompt}],
-            max_tokens=1500,
+            max_tokens=3000,
             temperature=0.2
         )
         return json.loads(response.choices[0].message.content)
+
+    def update_trello_and_db(self, classified_output, db_manager):
+        summary = classified_output['summary']
+        tasks_to_update = classified_output['classified_sentences']
+
+        for task in tasks_to_update:
+            if task['category'] == 'Task':
+                self.trello_api.create_or_update_task(task)
+                db_manager.update_task(task)
+            elif task['category'] == 'Update':
+                self.trello_api.add_comment_to_task(task)
+                db_manager.update_task_status(task)
+
+        db_manager.save_changes()
+
+        with open(GLOBALS.output_path + '/meeting_summary.txt', 'w') as f:
+            f.write(summary)
+
+        return summary
+
+    def run(self):
+        response = self.classify_and_extract()
+        tasks_to_update = response['classified_sentences']
+        data_for_summary  = response['summary']
+        return tasks_to_update, data_for_summary
+
+
 
 # Example usage:
 # classifier = TranscriptClassifier(transcription_data)

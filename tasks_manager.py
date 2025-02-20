@@ -15,33 +15,40 @@ class TasksManager:
                  sender_email =GLOBALS.sender_email,
                  sender_password = GLOBALS.sender_password):
         """Initialize the Main class and prepare transcription handling."""
+        self.data_for_summary = None
+        self.tasks_to_update = None
         self.transcription_txt = None
         self.transcriptClassifier = None
         self.wav_path = wav_path
         self.db_manager = DBManager()
-        self.audio_handler = None
         self.transcription_handler = None
         self.transcription_for_ask_model = None
         self.transcription_json = None  # To store the transcription content
         self.extract_tasks = None  # To process transcription tasks
         self.tasks = None
-        self.trello_api = TrelloAPI()
-        GLOBALS.users_name_trello = self.trello_api.get_usernames()
-        GLOBALS.id_users_name_trello = self.trello_api.get_id_and_usernames()
-        GLOBALS.list_tasks = self.trello_api.get_all_card_details()
+        self.trello_api_employees = TrelloAPI(GLOBALS.bord_id_employees)
         # self.to_emails = to_emails  # Load email recipients from globals
         self.summary_model = DailySummary(sender_email, sender_password)  # Initialize email sender
         self.summary = None  # Placeholder for the generated summary
         self.transcription_handler = TranscriptionHandler(wav_path)
+        try:
+            GLOBALS.users_name_trello = self.trello_api_employees.get_usernames()
+            GLOBALS.id_users_name_trello = self.trello_api_employees.get_id_and_usernames()
+            print(GLOBALS.id_users_name_trello )
+            GLOBALS.list_tasks = self.trello_api_employees.get_all_card_details()
+        except Exception as e:
+            print(f"Error loading Trello data: {e}")
 
-        if not self.db_manager.db_tasks_path and not self.db_manager.db_users_path:
+        if not os.path.exists (self.db_manager.db_tasks_path) or not os.path.exists (self.db_manager.db_users_path):
             init_project = InitProject()
-            rows_users, rows_tasks = init_project.generate_db_rows()
-            self.db_manager.create_db(rows_users, rows_tasks)
+            init_project.run()
+        self.trello_api_manager = TrelloAPI()
 
-    def process_transcription(self,mp3_path):
-        self.transcription_handler = TranscriptionHandler(mp3_path)
-        self.transcription_json, self.transcription_txt = self.transcription_handler.run()
+
+
+    def process_transcription(self,wav_path):
+        self.transcription_handler = TranscriptionHandler(wav_path)
+        self.transcription_json, self.transcription_txt = self.transcription_handler.run_all_file()
         return self.transcription_json
 
 
@@ -59,22 +66,22 @@ class TasksManager:
         if not self.transcription_for_ask_model:
             print("Error: No transcription text available for processing.")
             return None
-        self.transcriptClassifier = TranscriptClassifier(self.transcription_for_ask_model)
+        self.tasks_to_update, self.data_for_summary = TranscriptClassifier(self.transcription_for_ask_model, self.trello_api_employees)
 
         # Initialize the transcription handler and generate tasks
-        self.extract_tasks = ExtractTasks(self.transcription_for_ask_model, self.trello_api)
-        tasks = self.extract_tasks.generate_tasks()
+        self.extract_tasks = ExtractTasks(self.transcription_for_ask_model, self.trello_api_employees)
+        self.tasks = self.extract_tasks.generate_tasks()
         print("Tasks generated successfully.")
-        return tasks
+        return self.tasks
 
-    def dailysummary(self):
+    def daily_summary(self):
         """Generate and send a daily summary via email."""
         if not self.transcription_json:
             print("Error: No transcription text available to process.")
             return
 
         print("Processing and sending the daily summary...")
-        self.summary_model.process_and_notify(self.transcription_json)
+        self.summary_model.process_and_notify(self.data_for_summary,self.tasks)
         print("Daily summary sent successfully.")
 
     def extract_and_run_tasks(self):
@@ -120,7 +127,7 @@ class TasksManager:
         Handles nested lists, strings, and dictionaries.
         """
         # Map available functions to Trello API methods
-        functions_mapping = {func_name: getattr(self.trello_api, func_name)
+        functions_mapping = {func_name: getattr(self.trello_api_employees, func_name)
                              for func_name in GLOBALS.functions_dict.keys()}
 
         # Ensure tasks is a list, handle single dictionary or string as input
@@ -193,10 +200,12 @@ class TasksManager:
 
         if self.tasks:
             self.extract_and_run_tasks()
+
+            self.db_manager.generate_updates_from_model(self.tasks_to_update)
             print("Sending daily summary...")
         else:
             print("No tasks generated. Skipping summary.")
-        self.dailysummary()  # Send the daily summary
+        self.daily_summary()  # Send the daily summary
 
 
 if __name__ == "__main__":

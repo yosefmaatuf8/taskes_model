@@ -129,7 +129,7 @@ class TranscriptionHandler:
         names_string = self.names_context
 
         if token_count > self.max_tokens:
-            chunks = split_text(transcription, self.max_tokens - 700)
+            chunks = split_text(self.tokenizer,transcription, self.max_tokens - 700)
             for chunk in chunks:
                 names_string = self.find_in_chunk(chunk, names_string)
                 known_names.update(self.parse_names(names_string, known_names))
