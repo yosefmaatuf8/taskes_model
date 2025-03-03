@@ -4,7 +4,7 @@ from globals import GLOBALS
 from openai import OpenAI
 from trello_api import TrelloAPI
 from db_manager import DBManager
-from utils import split_text, extract_json_from_code_block
+from utils.utils import split_text, extract_json_from_code_block
 
 
 class InitProject:
@@ -102,65 +102,93 @@ class InitProject:
         Constructs a structured prompt to send to the AI model.
         Ensures that the AI returns valid JSON output.
         """
+
         return f"""
         You are an expert in project management and task tracking.
-        Your goal is to analyze the given Trello data and structure it into a well-defined database
-        for project status tracking, while also generating a corresponding Trello board.
-        **Return only valid JSON, no explanations or code.**
+        Your goal is to analyze the given Trello data and structure it into a well-organized database **for full task tracking**.
 
         --- **Input Data** ---
-        Users (list of usernames and IDs):  
+        Users (list of usernames and IDs):
         {users}
 
-        Tasks (dictionary with task details from Trello):  
+        Tasks (dictionary with task details from Trello):
         {tasks}
 
-        --- **Expected Output** ---
+        --- **Required Database Structure** ---
+        1) `rows_users` must contain:
+           - `id` (Trello user ID or unique ID)
+           - `name` (Trello display name)
+           - `hebrew_name` (If available, otherwise `""`)
+           - `full_name_english` (If available, otherwise `""`)
+           - `embedding` (Always `""`)
+
+        2) `full_tasks` must contain:
+           - `id` (MUST be identical to the Trello task ID)
+           - `topic` (Attempt to classify logically, but **DO NOT use Trello list names as topics**)
+           - `name` (Trello task name)
+           - `status` (Derived from Trello, otherwise `""`)
+           - `assigned_user` (Matching Trello username, otherwise `""`)
+           - `summary` (Short extracted description, otherwise `""`)
+
+        3) `trello_board` must be a JSON in the format:
+           {{
+             "lists": {{
+               "Project Section Name": [
+                 {{
+                   "id": "Task ID (MUST match Trello task ID)",
+                   "name": "Task Name",
+                   "description": "Task description, if available",
+                   "assigned_user_id": "Trello user ID or username"
+                 }}
+               ]
+             }}
+           }}
+
+        --- **Expected JSON Output** ---
         ```json
         {{
-          "db_status_rows": [
-            {{
-              "topic": "Project Section",
-              "progress": "Summarized progress",
-              "tasks": [
-                {{
-                  "id": "Task ID",
-                  "name": "Task Name",
-                  "status": "Derived from list name or description",
-                  "assigned_user_id": "Trello *UserName* (for example "sara39")"
-                }}
-              ]
-            }}
-          ],
           "rows_users": [
             {{
-              "id": "Trello ID or username",
-              "user_name": "Trello display name",
-              "hebrew_name": "Extracted Hebrew name",
-              "hebrew_name_english": "Extracted English name",
+              "id": "Trello user ID",
+              "name": "Trello display name",
+              "hebrew_name": "",
+              "full_name_english": "",
               "embedding": ""
+            }}
+          ],
+          "full_tasks": [
+            {{
+              "id": "Trello task ID",
+              "topic": "Classified topic based on task content",
+              "name": "Task Name",
+              "status": "",
+              "assigned_user": "",
+              "summary": ""
             }}
           ],
           "trello_board": {{
             "lists": {{
               "Project Section": [
                 {{
+                  "id": "Trello task ID",
                   "name": "Task Name",
-                  "description": "Task description",
-                  "assigned_user_id": "Trello User ID"
+                  "description": "",
+                  "assigned_user_id": "Trello user ID or username"
                 }}
               ]
             }}
           }}
         }}
         ```
-        - **Extract `hebrew_name` and `hebrew_name_english` properly.**  
-        - **Infer `status` from list name and description:**  
-        - **Ensure every project section (`topic`) contains a list of relevant tasks.**
-        - **Make sure all existing and relevant tasks fall under the corresponding project (`topic`) section.**
-        - **Make sure tasks are correctly linked to their respective users by `assigned_user_id`.**
-    .  
-        - **Return JSON only, no extra text.**
+
+        **Important Rules:**
+        1. The **task `id` must match** the corresponding Trello task ID.
+        2. All unknown values should be **empty strings (`""`)**.
+        3. **DO NOT use Trello list names as topics**. Instead, try to classify tasks logically.
+        4. If a task does not clearly belong to an existing topic, leave `"topic": ""`.
+        5. Ensure the JSON response is **valid, complete, and contains no additional text**.
+
+        **Return JSON only, no extra explanations.**
         """
 
     def send_to_gpt(self, prompt):
@@ -250,7 +278,11 @@ class InitProject:
             print(f"Failed to fetch Trello board with ID {board_id}: {e}")
 
     def run(self):
-        rows_users, status_rows, trello_data = self.generate_db_rows()
+        """
+        Initializes the DB files with the correct columns
+        based on the new structure before populating them.
+        """
+
 
         # board_id = self.create_new_trello_board("status_project_1")
         board_id = "67b5d782eb0035bdd4bb8595"
@@ -260,8 +292,86 @@ class InitProject:
             set_key(env_file,"BORD_ID_MANAGER", board_id)
 
             self.trello_api.board_id = board_id
-            self.create_trello_board_from_data(trello_data, board_id)
         else:
             print("Failed to create Trello board. Exiting.")
-            return
-        self.db_manager.create_db(rows_users, status_rows)
+
+
+
+        # 1) Define minimal columns for each CSV
+        rows_users = [
+            {
+                "id": "",
+                "name": "",
+                "hebrew_name": "",
+                "full_name_english": "",
+                "embedding": ""
+            }
+        ]
+        rows_tasks = [
+            {
+                "id": "",
+                "topic": "",
+                "name": "",
+                "status": "",
+                "assigned_user": ""
+            }
+        ]
+        rows_topics = [
+            {
+                "topic": "",
+                "topic_status": "",
+                "tasks_id": ""
+            }
+        ]
+        rows_full_data = [
+            {
+                "id": "",
+                "topic": "",
+                "name": "",
+                "status": "",
+                "assigned_user": "",
+                "summary": ""
+            }
+        ]
+        rows_meetings = [
+            {
+                "meeting_id": "",
+                "transcription": "",
+                "topics": ""
+            }
+        ]
+
+
+            # Attempt to generate data from Trello (or GPT)
+        trello_users, trello_rows_full_data, trello_data = self.generate_db_rows()  # If needed
+
+        # Merge trello_users into rows_users
+        if trello_users:  # if non-empty
+            # Drop the minimal row placeholder
+            rows_users = trello_users
+
+        # Merge trello_status_rows into rows_topics
+        if trello_rows_full_data:  # if non-empty
+
+            merged_rows_full_data = []
+            for item in trello_rows_full_data:
+                merged_rows_full_data.append({
+                    "topic": item.get("topic", ""),
+                    "topic_status": item.get("progress", ""),
+                    "tasks_id": ""  # We'll leave this blank or fill from item.get("tasks") if relevant
+                })
+            rows_full_data = merged_rows_full_data
+
+        #
+
+        # 3) Create CSV files with the final structures
+        self.db_manager.create_db(
+            rows_users=rows_users,
+            rows_tasks=rows_tasks,
+            rows_topics=rows_topics,
+            rows_full_data=rows_full_data,
+            rows_meetings=rows_meetings
+        )
+
+        print("Database initialized with minimal columns + optional Trello data for each CSV.")
+

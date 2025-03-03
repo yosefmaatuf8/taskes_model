@@ -1,7 +1,7 @@
 import sys
 from extensions import socketio  # ייבוא המופע המשותף
 from logger import DualLogger
-from stream_recorder import StreamRecorder
+from src.stream_recorder import StreamRecorder
 
 if __name__ == '__main__':
     # אתחול socketio

@@ -53,7 +53,7 @@ class EmbeddingHandler:
         self.db_manager = db_manager
         self.huggingface_api_key = GLOBALS.huggingface_api_key
         self.inference = self.load_model()
-        self.embeddings = db_manager.load_user_embeddings() if db_manager else {}
+        self.embeddings = db_manager.load_user_embeddings()
         self.unknown_embeddings = {}
         self.threshold_closest = 0.8
         self.threshold_similarity = 0.1

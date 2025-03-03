@@ -1,4 +1,3 @@
-
 import subprocess
 import os
 import wave
@@ -8,7 +7,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from globals import GLOBALS
-from transcription_handler_1 import TranscriptionHandler  # Real-time transcription
+from transcription_handler import TranscriptionHandler  # Real-time transcription
 
 
 class StreamRecorder:
@@ -17,7 +16,8 @@ class StreamRecorder:
                  chunk_interval=GLOBALS.chunk_interval, silence_timeout=GLOBALS.silence_timeout, region_name='us-east-1'):
         self.meeting_start_time = None
         self.meeting_start_time_peth = None
-        self.last_chunk_time = None
+        self.last_chunk_time = None  # Not used for chunk timing anymore
+        self.last_recorded_duration = 0  # Tracks the actual recorded audio duration (in seconds)
         self.meeting_analyzer = None
         self.stream_url = stream_url
         self.chunk_interval = chunk_interval
@@ -60,18 +60,20 @@ class StreamRecorder:
     def cleanup_local_files(self):
         if hasattr(self, 'output_dir') and os.path.exists(self.output_dir):
             for file in os.listdir(self.output_dir):
-                if file.startswith('chunk_') or file == "full_meeting.wav":
+                if file.endswith('.wav'):
                     os.remove(os.path.join(self.output_dir, file))
-            os.rmdir(self.output_dir)
+            if not os.listdir(self.output_dir):
+                os.rmdir(self.output_dir)
 
     def setup_new_meeting(self):
-        self.meeting_start_time = time.time()
-        self.last_chunk_time = time.time()
+        self.meeting_start_time = time.monotonic()
+        self.last_chunk_time = time.monotonic()  # Not used for chunk timing anymore
+        self.last_recorded_duration = 0  # Reset recorded duration
         self.meeting_start_time_peth = datetime.now()
-        self.output_dir = f"meeting_{self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')}"
+        self.output_dir = GLOBALS.output_path + f"/meeting_{self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')}"
         os.makedirs(self.output_dir, exist_ok=True)
         self.full_recording_path = os.path.join(self.output_dir, "full_meeting.wav")
-        self.meeting_analyzer = TranscriptionHandler(self.full_recording_path,self.output_dir)  # Initialize the transcription handler with the full file
+        self.meeting_analyzer = TranscriptionHandler(self.full_recording_path, self.output_dir)
 
     def check_audio_activity(self, audio_chunk):
         if not audio_chunk:
@@ -105,28 +107,33 @@ class StreamRecorder:
             stderr_thread.start()
 
             wav_file = None
-            last_active_audio = None
+            last_active_audio = time.time()
             consecutive_silence_chunks = 0
             audio_activity_detected = False
             buffer = bytearray()
-            # Ensure proper initialization of time-related variables
-
-            # Inside the main loop:
+            silence_counter = 0  # Counter for detecting silence or stream loss
 
             try:
                 while True:
                     audio_chunk = process.stdout.read(1024 * 16)
 
                     if not audio_chunk:
-                        time.sleep(0.1)
-                        continue
+                        silence_counter += 1
+                        time.sleep(1)
+
+                        if silence_counter >= self.silence_timeout:
+                            print("No audio detected for too long. Stopping recording...")
+                            break  # Exit loop and finalize recording
+
+                        continue  # Keep waiting for audio
+
+                    silence_counter = 0  # Reset counter when audio returns
 
                     has_activity = self.check_audio_activity(audio_chunk)
 
                     if has_activity:
-
-
                         consecutive_silence_chunks = 0
+                        last_active_audio = time.time()
                         if not self.recording_started and not audio_activity_detected:
                             audio_activity_detected = True
                             continue
@@ -139,7 +146,6 @@ class StreamRecorder:
                             wav_file.setsampwidth(2)
                             wav_file.setframerate(16000)
                             self.recording_started = True
-                            last_active_audio = time.time()
 
                     else:
                         consecutive_silence_chunks += 1
@@ -152,51 +158,45 @@ class StreamRecorder:
                             last_active_audio = time.time()
                         elif time.time() - last_active_audio > self.silence_timeout:
                             print("Meeting ended, saving recording...")
-                            wav_file.close()
-                            file_size = os.path.getsize(self.full_recording_path)
-                            if file_size > 1024 * 100:
-                                s3_key = f"meetings/{self.output_dir}/full_meeting.wav"
-                                s3_path = self.upload_to_s3(self.full_recording_path, s3_key)
-                                if s3_path:
-                                    print(f"Meeting uploaded to S3: {s3_path}")
-                            self.cleanup_local_files()
-                            self.recording_started = False
-                            audio_activity_detected = False
-                            break
+                            break  # Exit loop and finalize recording
 
-                        current_time = time.time()  # Get current time
+                        # Calculate the actual recorded duration using the number of frames written
+                        frames_written = wav_file.tell()
+                        recorded_duration = frames_written / 16000.0  # Duration in seconds
 
-
-                        # Check if the chunk interval has passed since the last chunk
-                        if current_time - self.last_chunk_time >= self.chunk_interval:
-                            # Calculate the start and end times of the chunk relative to the meeting start
-
-
-                            chunk_start_time = max(0.0, self.last_chunk_time - self.meeting_start_time)
-                            # print("self.last_chunk_time:",self.last_chunk_time,"self.meeting_start_time",self.meeting_start_time,)
-                            chunk_end_time = current_time - self.meeting_start_time
-
-                            # print("chunk_end_time",chunk_end_time,"chunk_start_time",chunk_start_time)
-                            # Update last_chunk_time to the current time after processing this chunk
-                            self.last_chunk_time = current_time
-
-                            # Send the start and end time to transcription
+                        # Process chunk if recorded_duration increased by chunk_interval
+                        if recorded_duration - self.last_recorded_duration >= self.chunk_interval:
+                            # Use actual audio duration values for chunk boundaries (no subtraction)
+                            chunk_start_time = self.last_recorded_duration
+                            chunk_end_time = recorded_duration
                             self.meeting_analyzer.run(chunk_start_time, chunk_end_time)
+                            self.last_recorded_duration = recorded_duration
 
                     if consecutive_silence_chunks > 50 and not self.recording_started:
                         audio_activity_detected = False
 
-                        # Update last_chunk_time to the current time after processing this chunk
-                          
-
             except Exception as e:
                 print(f"Error during recording: {e}")
-            finally:
-                if wav_file:
-                    wav_file.close()
-                process.terminate()
 
-            time.sleep(5)
+            finally:
+                if self.recording_started:  # Finalize the recording
+                    print("Meeting ended, saving recording...")
+                    if wav_file:
+                        wav_file.close()
+                    file_size = os.path.getsize(self.full_recording_path) if os.path.exists(self.full_recording_path) else 0
+                    if file_size > 1024 * 100:
+                        self.meeting_analyzer.stop_transcription(self.meeting_start_time)
+                        s3_key = f"meetings/{self.output_dir}/full_meeting.wav"
+                        s3_path = self.upload_to_s3(self.full_recording_path, s3_key)
+                        if s3_path:
+                            print(f"Meeting uploaded to S3: {s3_path}")
+                    self.cleanup_local_files()
+                    self.recording_started = False
+                    audio_activity_detected = False
+
+                process.terminate()  # Ensure ffmpeg process is closed before retrying
+
+            time.sleep(5)  # Wait before retrying the connection
 
 
 if __name__ == "__main__":

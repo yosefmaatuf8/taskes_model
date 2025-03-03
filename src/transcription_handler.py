@@ -7,7 +7,7 @@ from io import BytesIO
 from pyannote.audio import Audio
 import traceback
 import copy
-from utils import split_text
+from utils.utils import split_text
 from dotenv import load_dotenv
 import tiktoken
 from globals import GLOBALS
@@ -18,8 +18,6 @@ from embedding_handler import EmbeddingHandler
 
 class TranscriptionHandler:
     def __init__(self, wav_path=None, output_dir=GLOBALS.output_path, output_file=None, language=GLOBALS.language):
-        # self.chunk_size = GLOBALS.chunk_interval
-        # self.least_chunk = 4
         self.transcription_for_ask_model = None
         self.output_dir = output_dir
         self.names_context = ''
@@ -129,7 +127,7 @@ class TranscriptionHandler:
         names_string = self.names_context
 
         if token_count > self.max_tokens:
-            chunks = split_text(self.tokenizer,transcription, self.max_tokens - 700)
+            chunks = split_text(self.tokenizer,transcription, self.max_tokens - 1000)
             for chunk in chunks:
                 names_string = self.find_in_chunk(chunk, names_string)
                 known_names.update(self.parse_names(names_string, known_names))
@@ -146,28 +144,35 @@ class TranscriptionHandler:
                 "role": "system",
                 "content": (
                     "You will receive a conversation transcript with multiple speakers (e.g., speaker_0, speaker_1, etc.).\n"
-                    "Your task is to infer the real names of the speakers based on the conversation context and the provided Trello board names.\n"
-                    "- If you can determine a speaker's name based on the conversation context or Trello board, return it in the format: `speaker_X: Name`.\n"
-                    "- If a speaker has already been assigned a name but there is strong evidence that a different name is more accurate, update it accordingly.\n"
-                    "- If you cannot determine the name of a speaker, do NOT include that speaker in the response at all.\n"
-                    "- Do NOT return 'Unknown' or any unidentified speakers.\n"
-                    "- The conversation is in Hebrew, with a mixture of English words. Even if a speaker uses Hebrew or a combination of languages, please return the names spelled in English, not in Hebrew.\n"
-                    "- Maintain consistency with previously assigned names, but be flexible and update names if new evidence suggests a better match.\n"
-                    "- Use the names from the Trello board as a reference. If a speaker's identity matches a name from Trello, use that name.\n"
-                    "- Only include the identified speakers in the exact format below, with one speaker per line:\n\n"
-                    "speaker_0: Yosef\n"
-                    "speaker_2: John\n"
-                    "speaker_5: Sarah\n\n"
-                    "If you encounter a speaker who you cannot identify after considerable context or if you're unsure about the name, **write in a separate line**:\n"
-                    "'Hi! I'm having trouble identifying speaker_X. Can you help me figure out who it is?'\n"
-                    "**DO NOT return a dictionary, JSON, or any other format!**"
+                    "Your task is to infer the **real names** of the speakers based on:\n"
+                    "- **The conversation context**\n"
+                    "- **The response patterns between speakers**\n"
+                    "- **The provided Trello board names**\n\n"
+                    "### **Key Instructions:**\n"
+                    "- **DO NOT assume that a speaker’s name is their identity just because it was mentioned.**\n"
+                    "  - Instead, infer speaker identities based on who is **addressed** and who **responds**.\n"
+                    "  - Example: If speaker_3 asks, 'Yosef, what did you do?' and speaker_5 responds with details, then **speaker_5 is likely Yosef**.\n\n"
+                    "- **Prioritize names from Trello** when assigning speaker identities.\n"
+                    "  - The Trello board contains **real employee/user names** that should be used whenever possible.\n"
+                    "  - If a speaker's identity strongly matches a Trello name, assign that name.\n\n"
+                    "- **If a speaker was already assigned a name, keep it unless strong new evidence suggests a better match.**\n\n"
+                    "- **Only return clearly identified speakers.**\n"
+                    "  - If a speaker cannot be identified with high confidence, **DO NOT** include them in the response.\n"
+                    "  - **DO NOT** return placeholders like 'Unknown' or generic terms.\n\n"
+                    "- **Expected Output Format (one speaker per line):**\n"
+                    "  speaker_0: Yosef\n"
+                    "  speaker_2: John\n"
+                    "  speaker_5: Sarah\n\n"
+                    "- **If a speaker's identity remains unclear, return the following line separately:**\n"
+                    "  'Hi! I'm having trouble identifying speaker_X. Can you help me figure out who it is?'\n\n"
+                    "**DO NOT return a dictionary, JSON, or any structured data format! The output should be plain text only.**"
                 ),
             },
             {"role": "system",
              "content": f"Previously identified names (these may be updated if a better match is found): {names_string}."},
             {"role": "system",
              "content": f"Trello board users (consider these names when identifying speakers): {self.users_name_trello}."},
-            {"role": "user", "content": chunk},  # The actual conversation chunk that needs processing
+            {"role": "user", "content": chunk},  # The actual conversation chunk to analyze
         ]
 
         response = requests.post(
@@ -185,6 +190,7 @@ class TranscriptionHandler:
             return ""
         print("response:  \n", response_json["choices"][0]["message"]["content"])
         return response_json["choices"][0]["message"]["content"]
+
 
     def parse_names(self, names_string, known_names):
         """Parse names string into a dictionary."""
@@ -340,107 +346,139 @@ class TranscriptionHandler:
 
         return self.transcription_for_ask_model
 
-
-
     def run_all_file(self, wav_path=None, output_dir=GLOBALS.output_path):
+        """
+        Process the entire audio file in chunks while maintaining logic consistency with `run()`.
+        """
         if wav_path:
             self.wav_path = wav_path
-        audio = AudioSegment.from_file(self.wav_path, format="wav")
-        audio_chunks = self.split_audio_if_needed(audio)
 
-        # start_time = 0  # Track the start time of each chunk in the original file
+        try:
+            audio = AudioSegment.from_file(self.wav_path, format="wav")
+            audio_chunks = self.split_audio_if_needed(audio)
+
+        except Exception as e:
+            print(f"Error loading audio file: {e}")
+            traceback.print_exc()
+            return None
+
         for chunk in tqdm(audio_chunks, desc="processing chunks..."):
-            # Step 2: Transcribe audio
-            json_transcription = self.transcribe_audio_with_whisper(chunk)
-            if not json_transcription:
+            if len(chunk) < 1000:
+                print(f"❌ Skipping short chunk ({len(chunk)}ms)")
                 continue
 
-            # # Step 3: Adjust timestamps to match the original audio
-            # for segment in json_transcription["segments"]:
-            #     segment["start"] += start_time
-            #     segment["end"] += start_time
-            transcription_with_clusters = self.embedding_handler.process_transcription_with_clustering(json_transcription, chunk)
-            for segment in transcription_with_clusters:
-                if segment["speaker"].startswith("unkno"):
-                    self.unknown_segments.append(segment)  # Collect unknown segments
+            try:
+                # Step 1: Transcribe audio with Whisper
+                json_transcription = self.transcribe_audio_with_whisper(chunk)
+                if not json_transcription:
+                    print("json_transcription is None")
+                    continue
 
-                self.full_transcription.append(segment)  # Add segments
+                # Step 2: Process transcription with clustering
+                transcription_with_clusters = self.embedding_handler.process_transcription_with_clustering(
+                    json_transcription, chunk
+                )
 
-                # Collect unknown segments
-        # Insert reclassified segments back into the full transcription in their original positions
+            except Exception as e:
+                print(f"Error in transcription processing: {e}")
+                traceback.print_exc()
+                continue
 
-        reclassified_unknowns = self.reclassify_unknown_speakers()
-        if len(reclassified_unknowns) > 0:
-            for segment in self.full_transcription:
-                segment["speaker"] = reclassified_unknowns.get(segment["speaker"], segment["speaker"])
+            try:
+                # Step 3: Handle unknown speakers and adjust timestamps
+                for segment in transcription_with_clusters:
+                    if segment["speaker"].startswith("unkno"):
+                        self.unknown_segments.append(segment)  # Collect unknown speakers
 
-        # Step 4: Infer speaker names based on the updated transcription
-        text_transcription = str([
-            {"speaker": seg["speaker"], "text": seg["text"]}
-            for seg in self.full_transcription
-        ])
-        inferred_names = self.infer_speaker_names(text_transcription)
-        self.names_context = inferred_names  # Update the context with the latest speaker names
+                    # Store final transcription result
+                    self.full_transcription.append(segment)
 
-        # Step 5: Update transcription with inferred speaker names
-        full_transcription_with_names = copy.deepcopy(self.full_transcription)
-        for segment in full_transcription_with_names:
-            speaker_label = segment['speaker']
-            speaker_name = inferred_names.get(speaker_label, segment['speaker'])
-            segment['speaker'] = speaker_name  # Update transcription with real speaker names
+                # ✅ Reclassify unknown speakers after adding new ones
+                reclassified_unknowns = self.reclassify_unknown_speakers()
+                if reclassified_unknowns:
+                    for segment in self.full_transcription:
+                        segment["speaker"] = reclassified_unknowns.get(segment["speaker"], segment["speaker"])
 
-        self.transcription_for_ask_model = str([
-            {"speaker": seg["speaker"], "text": seg["text"]}
-            for seg in full_transcription_with_names
-        ])
+            except Exception as e:
+                print(f"Error in handling speakers and timestamps: {e}")
+                traceback.print_exc()
+                continue
 
-        # Step 6: Save the final transcription with updated speaker names
-        today = datetime.datetime.today().strftime('%d_%m_%y')
+        try:
+            # Step 4: Infer speaker names based on full transcription
+            text_transcription = str([
+                {"speaker": seg["speaker"], "text": seg["text"]}
+                for seg in self.full_transcription
+            ])
+            inferred_names = self.infer_speaker_names(text_transcription)
+            self.names_context = inferred_names  # Update context with inferred speaker names
 
-        if self.output_file:
-            # If output_file ends with .json, use it for the JSON output file
-            if self.output_file.endswith('.json'):
-                self.output_path_json = os.path.join(output_dir, self.output_file)
-                self.output_path_txt = os.path.join(output_dir, self.output_file.replace('.json',
-                                                                                         '.txt'))  # Change the extension for the text file
-            elif self.output_file.endswith('.txt'):
-                self.output_path_txt = os.path.join(output_dir, self.output_file)
-                self.output_path_json = os.path.join(output_dir, self.output_file.replace('.txt',
-                                                                                          '.json'))  # Change the extension for the JSON file
+            # Step 5: Update transcription with inferred speaker names
+            full_transcription_with_names = copy.deepcopy(self.full_transcription)
+            for segment in full_transcription_with_names:
+                speaker_label = segment['speaker']
+                speaker_name = inferred_names.get(speaker_label, segment['speaker'])
+                segment['speaker'] = speaker_name  # Update with real speaker names
+
+            self.transcription_for_ask_model = str([
+                {"speaker": seg["speaker"], "text": seg["text"]}
+                for seg in full_transcription_with_names
+            ])
+
+        except Exception as e:
+            print(f"Error in inferring speaker names: {e}")
+            traceback.print_exc()
+            return None
+
+        try:
+            # Step 6: Save updated transcription
+            today = datetime.datetime.today().strftime('%d_%m_%y')
+
+            if self.output_file:
+                if self.output_file.endswith('.json'):
+                    self.output_path_json = os.path.join(output_dir, self.output_file)
+                    self.output_path_txt = os.path.join(output_dir, self.output_file.replace('.json', '.txt'))
+                elif self.output_file.endswith('.txt'):
+                    self.output_path_txt = os.path.join(output_dir, self.output_file)
+                    self.output_path_json = os.path.join(output_dir, self.output_file.replace('.txt', '.json'))
+                else:
+                    self.output_path_json = os.path.join(output_dir, f"transcription_{today}.json")
+                    self.output_path_txt = os.path.join(output_dir, f"transcription_{today}.txt")
             else:
-                # If no extension or a different one, use default names
                 self.output_path_json = os.path.join(output_dir, f"transcription_{today}.json")
                 self.output_path_txt = os.path.join(output_dir, f"transcription_{today}.txt")
-        else:
-            # If no output_file is provided, use default names for both
-            self.output_path_json = os.path.join(output_dir, f"transcription_{today}.json")
-            self.output_path_txt = os.path.join(output_dir, f"transcription_{today}.txt")
 
             # Ensure output directory exists
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
 
-            # Save the final transcription with all speaker names updated in JSON format
-        with open(self.output_path_json, "w", encoding="utf-8") as f:
-            json.dump(self.transcription_for_ask_model, f, ensure_ascii=False, indent=4)
+            # Save to JSON
+            with open(self.output_path_json, "w", encoding="utf-8") as f:
+                json.dump(full_transcription_with_names, f, ensure_ascii=False, indent=4)
 
-        print(f"Transcription saved to {self.output_path_json}")
 
-        # Read the JSON file and prepare the transcription in text format
-        with open(self.output_path_json, 'r') as f:
-            full_transcription_json = json.load(f)
-            full_transcription_txt = self.prepare_transcription(full_transcription_json)
 
-        # Save the transcription as a text file
-        with open(self.output_path_txt, "w", encoding="utf-8") as f:
-            f.write(full_transcription_txt)
+            # Read JSON file and convert transcription to text format
+            with open(self.output_path_json, 'r') as f:
+                full_transcription_json = json.load(f)
+                full_transcription_txt = self.prepare_transcription(full_transcription_json)
 
-        print(f"Text transcription saved to {self.output_path_txt}")
-        return self.output_path_json, self.output_path_txt
+            # Save text transcription
+            with open(self.output_path_txt, "w", encoding="utf-8") as f:
+                f.write(full_transcription_txt)
+
+            print(f"✅ Text transcription saved to {self.output_path_txt}")
+
+        except Exception as e:
+            print(f"Error in saving transcription: {e}")
+            traceback.print_exc()
+            return None
+
+        return self.transcription_for_ask_model
 
 
 if __name__ == "__main__":
-    file = "/home/mefathim/PycharmProjects/taskes_model_v2/db/meet_25_12_24_first.wav"
+    file = "/db/meet_25_12_24_first.wav"
     # Convert MP4 to WAV
     # audio = AudioSegment.from_file(f"{file}.mp4", format="mp4")
     # audio.export(f"{file}.wav", format="wav")
