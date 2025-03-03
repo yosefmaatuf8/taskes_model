@@ -120,8 +120,8 @@ class DBManager:
             return embeddings
 
         for _, row in df.iterrows():
-            embedding_str = row.get("embedding", "").strip()
-            hebrew_name_eng = row.get("hebrew_name_english", "").strip()
+            embedding_str = str(row.get("embedding", "")).strip()
+            hebrew_name_eng = str(row.get("hebrew_name_english", "")).strip()
 
             if not embedding_str or not hebrew_name_eng:
                 logging.warning(f"Skipping row due to missing data: {row}")
@@ -137,8 +137,12 @@ class DBManager:
 
     def save_user_embeddings(self, embeddings):
         df = pd.read_csv(self.db_users_path)
+        if 'embedding' not in df.columns:
+            df['embedding'] = ""
+
+        df['embedding'] = df['embedding'].astype(str)
         for user_id, emb in embeddings.items():
-            df.loc[df['hebrew_name_english'] == user_id, 'embedding'] = json.dumps(emb.tolist())
+            df.loc[df['name'] == user_id, 'embedding'] = json.dumps(emb.tolist())
         df.to_csv(self.db_users_path, index=False)
 
     def extract_topics_from_transcription(self, transcription_text):
