@@ -2,8 +2,7 @@ from flask import Flask, render_template
 from extensions import socketio  # Import the shared SocketIO instance
 from logger import DualLogger
 import sys
-import time
-from stream_recorder import StreamRecorder  # Assuming this handles streaming
+from src.stream_recorder import StreamRecorder  # Assuming this handles streaming
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'

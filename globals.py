@@ -1,6 +1,6 @@
 import os
 from dotenv import find_dotenv, load_dotenv
-from functions_dict import functions_dict
+from db.functions_dict import functions_dict
 
 
 class Globals:
@@ -9,16 +9,16 @@ class Globals:
         # Validate paths only for relevant variables
         self.sender_email = self.validate_env("SENDER_EMAIL")
         self.sender_password = self.validate_env("SENDER_PASSWORD")
-        self.max_tokens = self.validate_env("MAX_TOKENS")
+        self.manager_email = self.validate_env("MANAGER_EMAIL")
+        self.max_tokens = int(self.validate_env("MAX_TOKENS"))
         self.openai_api_key = self.validate_env("OPENAI_API_KEY")
         self.huggingface_api_key = self.validate_env("HUGGINGFACE_API_KEY")
         self.functions_dict = functions_dict
         self.db_path = self.validate_path("DB_PATH")
         self.db_username = 'db_user.csv'
         self.output_path = self.validate_path("OUTPUT_PATH")
-        # self.model_diarization = self.validate_env("MODEL_DIARIZATION")
         self.language = "he"
-
+        self.calendar_id = self.validate_env("CALENDAR_ID")
         self.bord_id_employees = self.validate_env("BORD_ID_EMPLOYEES")
         self.bord_id_manager = self.validate_env("BORD_ID_MANAGER")
         self.list_tasks = None

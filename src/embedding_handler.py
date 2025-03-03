@@ -12,10 +12,12 @@ class EmbeddingHandler:
         self.db_manager = db_manager
         self.huggingface_api_key = GLOBALS.huggingface_api_key
         self.inference = self.load_model()
-        self.embeddings = db_manager.load_user_embeddings() if db_manager else {}
+        self.embeddings = db_manager.load_user_embeddings()
         self.unknown_embeddings = {}
-        self.threshold_closest = 0.7
-        self.threshold_similarity = 0.2
+        self.threshold_closest = 0.8
+        self.threshold_similarity = 0.1
+        self.segment_length = 2
+        self.num_segments = 2
         self.speakers = []
         self.speaker_count = 0
         self.reclassify_callback = reclassify_callback  # Callback to reclassify unknown speakers
@@ -40,12 +42,12 @@ class EmbeddingHandler:
 
         try:
 
-            segment_length = len(audio) / 3  # 2 seconds in samples
-            num_segments = 3  # 6 seconds split into 3 segments of 2 seconds
+            # segment_length = len(audio) / 3  # 2 seconds in samples
+            # num_segments = 3  # 6 seconds split into 3 segments of 2 seconds
 
-            for i in range(num_segments):
-                start = i * segment_length
-                end = (i + 1) * segment_length
+            for i in range(self.num_segments):
+                start = i * self.segment_length
+                end = (i + 1) * self.segment_length
                 segment = audio[start:end]
 
                 # Convert to a file-like object in memory (BytesIO)
@@ -59,7 +61,7 @@ class EmbeddingHandler:
                 # Compute similarity between all possible pairs
             similarities = [
                 1 - cosine(embeddings[i], embeddings[j])
-                for i in range(num_segments) for j in range(i + 1, num_segments)
+                for i in range(self.num_segments) for j in range(i + 1, self.num_segments)
             ]
 
             return np.mean(similarities) if similarities else None
@@ -99,7 +101,7 @@ class EmbeddingHandler:
             similarity_score = self.compute_similarity(audio_clip)
             if similarity_score and similarity_score > self.threshold_similarity:
                 speaker_label = f"speaker_{self.speaker_count}"
-                audio_clip[:6000].export(buffer, format="wav")
+                audio_clip[:self.segment_length * self.num_segments * 1000].export(buffer, format="wav")
                 buffer.seek(0)
                 embedding = self.inference(buffer)
                 self.embeddings[speaker_label] = embedding
@@ -122,7 +124,7 @@ class EmbeddingHandler:
 
         if similarity_score and similarity_score > self.threshold_similarity:
             speaker_label = f"speaker_{self.speaker_count}"
-            audio_clip[:6000].export(buffer, format="wav")
+            audio_clip[:self.segment_length * self.num_segments * 1000].export(buffer, format="wav")
             buffer.seek(0)
             embedding = self.inference(buffer)
             self.embeddings[speaker_label] = embedding

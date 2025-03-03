@@ -1,25 +1,27 @@
 import os
+
+from pyasn1_modules.rfc5275 import GLKey
+
 from daily_summary import DailySummary
-from extract_tasks import ExtractTasks
+from extract_functions_for_update_bord import ExtractTasks
 from trello_api import TrelloAPI
 from globals import GLOBALS
-from post_transcription_data_processor import PostTranscriptionDataProcessor, TranscriptClassifier
-from transcription_handler_1 import TranscriptionHandler
+from post_transcription_data_processor import TranscriptionProcessing
+from transcription_handler import TranscriptionHandler
 from init_project import InitProject
 from db_manager import DBManager
 import json
 
 
 class TasksManager:
-    def __init__(self,wav_path = None,
-                 sender_email =GLOBALS.sender_email,
+    def __init__(self,wav_path = None,output_dir=GLOBALS.output_path,
+                 sender_email = GLOBALS.sender_email,
                  sender_password = GLOBALS.sender_password):
         """Initialize the Main class and prepare transcription handling."""
-        self.data_for_summary = None
-        self.tasks_to_update = None
         self.transcription_txt = None
         self.transcriptClassifier = None
         self.wav_path = wav_path
+        self.post_transcription = TranscriptionProcessing()
         self.db_manager = DBManager()
         self.transcription_handler = None
         self.transcription_for_ask_model = None
@@ -30,7 +32,8 @@ class TasksManager:
         # self.to_emails = to_emails  # Load email recipients from globals
         self.summary_model = DailySummary(sender_email, sender_password)  # Initialize email sender
         self.summary = None  # Placeholder for the generated summary
-        self.transcription_handler = TranscriptionHandler(wav_path)
+        self.transcription_handler = TranscriptionHandler(wav_path, output_dir)
+
         try:
             GLOBALS.users_name_trello = self.trello_api_employees.get_usernames()
             GLOBALS.id_users_name_trello = self.trello_api_employees.get_id_and_usernames()
@@ -42,7 +45,7 @@ class TasksManager:
         if not os.path.exists (self.db_manager.db_tasks_path) or not os.path.exists (self.db_manager.db_users_path):
             init_project = InitProject()
             init_project.run()
-        self.trello_api_manager = TrelloAPI()
+        self.trello_api_manager = TrelloAPI(GLOBALS.bord_id_manager)
 
 
 
@@ -66,7 +69,7 @@ class TasksManager:
         if not self.transcription_for_ask_model:
             print("Error: No transcription text available for processing.")
             return None
-        self.tasks_to_update, self.data_for_summary = TranscriptClassifier(self.transcription_for_ask_model, self.trello_api_employees)
+        self.tasks_to_update = TranscriptionProcessing.process_transcription(self.transcription_for_ask_model)
 
         # Initialize the transcription handler and generate tasks
         self.extract_tasks = ExtractTasks(self.transcription_for_ask_model, self.trello_api_employees)
@@ -170,6 +173,8 @@ class TasksManager:
             except Exception as e:
                 print(f"Error executing task {task}: {e}")
 
+
+
     def ran_for_chunks(self, start_time=0, end_time=0):
         if not os.path.exists(self.wav_path):
             print("Aborting: No wav_path found.")
@@ -207,8 +212,25 @@ class TasksManager:
             print("No tasks generated. Skipping summary.")
         self.daily_summary()  # Send the daily summary
 
+    def test(self, transcription, trello_list, trello_names):
+        self.transcription_for_ask_model = transcription
+        GLOBALS.list_tasks = trello_list
+        GLOBALS.id_users_name_trello = trello_names
+        print("init_project")
+        init_project = InitProject()
+        init_project.run()
+        data_from_transcription = self.post_transcription.process_transcription(self.transcription_for_ask_model)
+        output = self.db_manager.update_project_data(data_from_transcription)
+        print(output)
 
 if __name__ == "__main__":
+    json_path =  "/home/mefathim/PycharmProjects/taskes_model_v2/trello_debug_data_1.json"
+    full_json = json.load(open(json_path))
+    transcription = full_json["meeting_transcript"]
+    trello_list = full_json["trello_board"]
+    trello_names = full_json["names_trello"]
     test = TasksManager()
+    test.test(transcription, trello_list, trello_names)
     # test.run()
+
 
