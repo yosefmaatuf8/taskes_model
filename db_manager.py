@@ -215,7 +215,6 @@ class DBManager:
             max_tokens=4000,
             temperature=0.1
         )
-        print("topics_from_transcription:--", extract_json_from_code_block(response.choices[0].message.content))
         return extract_json_from_code_block(response.choices[0].message.content)
 
     def generate_updates_from_model(self, topic_name, new_data, type_db, trello_tasks="not_relevant"):
@@ -317,7 +316,6 @@ class DBManager:
         df_for_update = self.generate_updates_from_model(topic_name, data_topic_and_tasks, "db_full_data_path",
                                                          self.trello_tasks)
 
-        print(" Updates Received:", json.dumps(df_for_update, indent=2, ensure_ascii=False))  # Debugging print
 
         existing_ids = set(df_existing["id"].dropna().astype(str))  # ✅ Get existing IDs
         updated_tasks_log = []
@@ -328,7 +326,6 @@ class DBManager:
             # ✅ Generate a unique ID if the task doesn't exist
             if not task_id or task_id not in existing_ids:
                 new_id = str(uuid.uuid4())[:5]
-                print(f"⚠️ Replacing invalid or missing ID '{task_id}' with new ID '{new_id}'")
                 task_id = new_id
                 update["id"] = task_id
 
@@ -348,8 +345,6 @@ class DBManager:
                 old_value = before_update_value.get(field, "")
 
                 if str(new_value) != str(old_value):  # ✅ Update only if there's a real change
-                    print(f"🔄 Updating {field}: '{old_value}' → '{new_value}' for Task ID: {task_id}")
-
                     if task_id in df_existing["id"].values:
                         df_existing.loc[df_existing["id"] == task_id, field] = new_value
                     else:
@@ -559,7 +554,6 @@ class DBManager:
             "updated_statuses": updated_statuses if updated_statuses else []
         }
 
-        print("✅ Final Trello updates:", json.dumps(trello_updates, ensure_ascii=False, indent=2))  # Debugging
         return trello_updates
 
     def update_project_data(self, processed_transcription, meeting_id, meeting_datetime):
@@ -621,11 +615,9 @@ class DBManager:
 
         # Ensure `meeting_id` is correctly used as the ID column
         self.update_db("db_meetings_transcriptions_path", rows_meetings, "meeting_id")
-
         output =  {
             "data_topics_and_tasks": self.data_topics_and_tasks,
             "updated_topics": self.updated_tasks_log,
             "updated_for_trello": self.updated_for_trello
         }
-        print(json.dumps(output, ensure_ascii=False))
         return output

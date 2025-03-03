@@ -40,7 +40,6 @@ class ExtractAndRunFunctions:
             existing_card = existing_task_names.get(task_name.lower())
 
             if existing_card:
-                print(f"Updating existing card '{task_name}'")
                 self.trello_api.update_card(
                     card_name=task_name,
                     task_id=task_id,
@@ -51,7 +50,6 @@ class ExtractAndRunFunctions:
             else:
                 # Ensure the list exists before creating a card
                 if topic.lower() not in existing_lists:
-                    print(f"Creating list '{topic}'")
                     self.trello_api.create_list(topic)
 
                 # Create the first card in the list (Status of the Topic) if missing
@@ -60,11 +58,9 @@ class ExtractAndRunFunctions:
                 existing_status_card = self.trello_api.get_card_by_name(status_card_name)
 
                 if not existing_status_card:
-                    print(f"Creating status card '{status_card_name}' in list '{topic}'")
                     self.trello_api.create_card(topic, status_card_name, status_description, "", "", "")
 
                 # Create the new task card
-                print(f"Creating new card '{task_name}' in list '{topic}'")
                 new_card_id = self.trello_api.create_card(
                     topic,
                     task_name,
@@ -75,7 +71,6 @@ class ExtractAndRunFunctions:
                 )
                 # Assign ID, status, and user in description
                 if new_card_id:
-                    print(f"Assigning id_db '{task_id}', status '{new_status}', and user '{assigned_user}' to new card '{task_name}'")
                     self.trello_api.update_card(
                         card_name=task_name,
                         task_id=task_id,
@@ -91,8 +86,6 @@ class ExtractAndRunFunctions:
                 existing_status_card = self.trello_api.get_card_by_name(status_card_name)
 
                 if existing_status_card:
-                    print(f"Updating status card for '{topic}'")
                     self.trello_api.update_card(status_card_name, new_description=f"Current Status: {status}")
                 else:
-                    print(f"Creating missing status card for '{topic}'")
                     self.trello_api.create_card(topic, status_card_name, "","",f"Current Status: {status}","")
