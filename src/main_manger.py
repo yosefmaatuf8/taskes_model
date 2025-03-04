@@ -1,4 +1,6 @@
-
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from post_transcription_data_processor import TranscriptionProcessing
 from extract_and_run_functions_trello import ExtractAndRunFunctions
 from transcription_handler import TranscriptionHandler
@@ -9,7 +11,6 @@ from db_manager import DBManager
 from globals import GLOBALS
 import uuid
 import json
-import os
 
 
 
@@ -21,7 +22,7 @@ class Manger:
         self.meeting_datetime = None
         self.db_manager = DBManager()
 
-        self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
+        # self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
         self.transcription_json_str = None
 
         self.post_transcription = TranscriptionProcessing()
@@ -84,7 +85,7 @@ class Manger:
         if not os.path.exists(self.wav_path):
             print("Aborting: No wav_path found.")
             return
-        self.process_transcription(self.wav_path)
+        # self.process_transcription(self.wav_path)
         if not self.transcription_json_str:
             print("Aborting: No transcription json found.")
             return
@@ -116,7 +117,7 @@ class Manger:
 
 if __name__ == "__main__":
     test = Manger("/home/mefathim/PycharmProjects/taskes_model_v2/db/output/meeting_20250213_120422/full_meeting.wav")
-    path = "/home/mefathim/PycharmProjects/taskes_model_v2/db/output/test.json"
+    path = "/home/mefathim/PycharmProjects/taskes_model_v2/db/output/transcription_test.json"
     with open(path, "r", encoding="utf-8") as f:
         test.transcription_json_str = json.dumps(json.load(f), ensure_ascii=False)
     test.meeting_datetime = "2025-02-26 12:30"
@@ -211,5 +212,5 @@ if __name__ == "__main__":
       }
     }
     )
-    # test.trello_list = trello_list
+    test.trello_list = trello_list
     test.run()
