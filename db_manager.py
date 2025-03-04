@@ -1,5 +1,4 @@
 import pandas as pd
-import logging
 import uuid
 import json
 import numpy as np
@@ -110,30 +109,29 @@ class DBManager:
         embeddings = {}
 
         if not self.db_users_path or not os.path.exists(self.db_users_path):
-            logging.warning("Database user file path is invalid or does not exist.")
+            print("Database user file path is invalid or does not exist.")
             return embeddings
 
         try:
-            df = pd.read_csv(self.db_users_path)
+            df = pd.read_csv(self.db_users_path, usecols=["name", "embedding"])  # Load only needed columns
         except Exception as e:
-            logging.error(f"Error loading CSV file: {e}")
+            print(f"Error loading CSV file: {e}")
             return embeddings
 
         for _, row in df.iterrows():
+            name = str(row.get("name", "")).strip()
             embedding_str = str(row.get("embedding", "")).strip()
-            hebrew_name_eng = str(row.get("hebrew_name_english", "")).strip()
 
-            if not embedding_str or not hebrew_name_eng:
-                logging.warning(f"Skipping row due to missing data: {row}")
-                continue
+            if not name or not embedding_str or embedding_str.lower() in ["", "nan", "none"]:
+                continue  # Skip rows with missing values
 
             try:
-                embeddings[hebrew_name_eng] = np.array(json.loads(embedding_str))
-            except (json.JSONDecodeError, ValueError) as e:
-                logging.warning(f"Skipping invalid embedding for {hebrew_name_eng}: {e}")
+                embedding_list = json.loads(embedding_str)  # Convert JSON string to list
+                embeddings[name] = np.array(embedding_list)  # Store as NumPy array
+            except (json.JSONDecodeError, ValueError):
+                continue  # Skip invalid embeddings
 
         return embeddings
-
 
     def save_user_embeddings(self, embeddings):
         df = pd.read_csv(self.db_users_path)

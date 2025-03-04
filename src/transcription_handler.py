@@ -33,7 +33,7 @@ class TranscriptionHandler:
         self.max_tokens = int(GLOBALS.max_tokens)
         self.output_path_json = None
         self.output_path_txt = None
-        self.max_size = 10  # Maximum audio duration per segment in mb
+        self.max_size = 20  # Maximum audio duration per segment in mb
         self.speakers = []
         self.least_chunk = 4
         self.chunk_size = GLOBALS.chunk_interval
@@ -286,6 +286,10 @@ class TranscriptionHandler:
             ])
             inferred_names = self.infer_speaker_names(text_transcription)
             self.names_context = inferred_names  # Update context with speaker names
+            self.embedding_handler.embeddings = {
+                inferred_names.get(key, key): value
+                for key, value in self.embedding_handler.embeddings.items()
+            }
 
             full_transcription_with_names = copy.deepcopy(self.full_transcription)
             for segment in full_transcription_with_names:
@@ -412,16 +416,22 @@ class TranscriptionHandler:
             ])
             inferred_names = self.infer_speaker_names(text_transcription)
             self.names_context = inferred_names  # Update context with inferred speaker names
-
+            self.embedding_handler.embeddings = {
+                inferred_names.get(key, key): value
+                for key, value in self.embedding_handler.embeddings.items()
+            }
+            if self.db_manager.db_users_path:
+                self.db_manager.save_user_embeddings(self.embedding_handler.embeddings)
             # Step 5: Update transcription with inferred speaker names
             full_transcription_with_names = copy.deepcopy(self.full_transcription)
             for segment in full_transcription_with_names:
                 speaker_label = segment['speaker']
                 speaker_name = inferred_names.get(speaker_label, segment['speaker'])
                 segment['speaker'] = speaker_name  # Update with real speaker names
-
+            df_users = self.db_manager.read_db("db_users_path")
+            dict_username_name = dict(zip(df_users["name"], df_users["full_name_english"]))
             self.transcription_for_ask_model = str([
-                {"speaker": seg["speaker"], "text": seg["text"]}
+                {"speaker":dict_username_name.get(seg["speaker"],seg["speaker"]), "text": seg["text"]}
                 for seg in full_transcription_with_names
             ])
 

@@ -21,7 +21,7 @@ class Manger:
         self.meeting_datetime = None
         self.db_manager = DBManager()
 
-        # self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
+        self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
         self.transcription_json_str = None
 
         self.post_transcription = TranscriptionProcessing()
@@ -98,7 +98,7 @@ class Manger:
         if not self.updated_for_trello:
             print("Aborting: No updated trello data.")
 
-        # self.daily_summary()
+        self.daily_summary()
 
 
     def ran_for_chunks(self, start_time=0, end_time=0):
@@ -211,5 +211,5 @@ if __name__ == "__main__":
       }
     }
     )
-    test.trello_list = trello_list
+    # test.trello_list = trello_list
     test.run()

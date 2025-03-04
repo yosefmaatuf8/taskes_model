@@ -2,12 +2,13 @@ import subprocess
 import os
 import wave
 import time
+import select
 import threading
 from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from globals import GLOBALS
-from transcription_handler import TranscriptionHandler  # Real-time transcription
+from src.main_manger import Manger  # Real-time transcription
 
 
 class StreamRecorder:
@@ -73,7 +74,7 @@ class StreamRecorder:
         self.output_dir = GLOBALS.output_path + f"/meeting_{self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')}"
         os.makedirs(self.output_dir, exist_ok=True)
         self.full_recording_path = os.path.join(self.output_dir, "full_meeting.wav")
-        self.meeting_analyzer = TranscriptionHandler(self.full_recording_path, self.output_dir)
+        self.meeting_analyzer = Manger(self.full_recording_path, self.output_dir)
 
     def check_audio_activity(self, audio_chunk):
         if not audio_chunk:
@@ -111,23 +112,37 @@ class StreamRecorder:
             consecutive_silence_chunks = 0
             audio_activity_detected = False
             buffer = bytearray()
-            silence_counter = 0  # Counter for detecting silence or stream loss
+            silence_counter = 0
+            stream_lost_start_time = None
 
             try:
                 while True:
-                    audio_chunk = process.stdout.read(1024 * 16)
+                    # בדיקה אם `ffmpeg` נסגר
+                    if process.poll() is not None:
+                        if stream_lost_start_time is None:
+                            stream_lost_start_time = time.time()  # מתחילים למדוד כמה זמן הזרם כבוי
+                        elif time.time() - stream_lost_start_time >= self.silence_timeout:
+                            print("FFmpeg process closed for too long. Stopping recording...")
+                            break  # זרם הפסיק לזמן ממושך - מפסיקים את ההקלטה
+                        time.sleep(1)
+                        continue  # ממתינים לזרם לחזור
 
+                    audio_chunk = process.stdout.read(1024 * 16)
                     if not audio_chunk:
                         silence_counter += 1
+                        if stream_lost_start_time is None:
+                            stream_lost_start_time = time.time()
                         time.sleep(1)
 
-                        if silence_counter >= self.silence_timeout:
+                        if time.time() - stream_lost_start_time >= self.silence_timeout:
                             print("No audio detected for too long. Stopping recording...")
-                            break  # Exit loop and finalize recording
+                            break
 
-                        continue  # Keep waiting for audio
+                        continue
 
-                    silence_counter = 0  # Reset counter when audio returns
+                        # אם חזר אודיו - מאפסים את זמן איבוד הזרם
+                    stream_lost_start_time = None
+                    silence_counter = 0
 
                     has_activity = self.check_audio_activity(audio_chunk)
 
@@ -151,25 +166,22 @@ class StreamRecorder:
                         consecutive_silence_chunks += 1
 
                     if self.recording_started:
-                        wav_file.writeframes(audio_chunk)  # Append to the full recording file
+                        wav_file.writeframes(audio_chunk)
                         buffer.extend(audio_chunk)
 
                         if has_activity:
                             last_active_audio = time.time()
                         elif time.time() - last_active_audio > self.silence_timeout:
                             print("Meeting ended, saving recording...")
-                            break  # Exit loop and finalize recording
+                            break
 
-                        # Calculate the actual recorded duration using the number of frames written
                         frames_written = wav_file.tell()
-                        recorded_duration = frames_written / 16000.0  # Duration in seconds
+                        recorded_duration = frames_written / 16000.0
 
-                        # Process chunk if recorded_duration increased by chunk_interval
                         if recorded_duration - self.last_recorded_duration >= self.chunk_interval:
-                            # Use actual audio duration values for chunk boundaries (no subtraction)
                             chunk_start_time = self.last_recorded_duration
                             chunk_end_time = recorded_duration
-                            self.meeting_analyzer.run(chunk_start_time, chunk_end_time)
+                            self.meeting_analyzer.ran_for_chunks(chunk_start_time, chunk_end_time)
                             self.last_recorded_duration = recorded_duration
 
                     if consecutive_silence_chunks > 50 and not self.recording_started:
@@ -179,13 +191,14 @@ class StreamRecorder:
                 print(f"Error during recording: {e}")
 
             finally:
-                if self.recording_started:  # Finalize the recording
+                if self.recording_started:
                     print("Meeting ended, saving recording...")
                     if wav_file:
                         wav_file.close()
-                    file_size = os.path.getsize(self.full_recording_path) if os.path.exists(self.full_recording_path) else 0
+                    file_size = os.path.getsize(self.full_recording_path) if os.path.exists(
+                        self.full_recording_path) else 0
                     if file_size > 1024 * 100:
-                        self.meeting_analyzer.stop_transcription(self.meeting_start_time)
+                        self.meeting_analyzer.stop_transcription(self.meeting_start_time_peth)
                         s3_key = f"meetings/{self.output_dir}/full_meeting.wav"
                         s3_path = self.upload_to_s3(self.full_recording_path, s3_key)
                         if s3_path:
@@ -194,9 +207,11 @@ class StreamRecorder:
                     self.recording_started = False
                     audio_activity_detected = False
 
-                process.terminate()  # Ensure ffmpeg process is closed before retrying
+                # ודא שהתהליך נסגר
+                process.terminate()
+                process.wait()
 
-            time.sleep(5)  # Wait before retrying the connection
+            time.sleep(5)
 
 
 if __name__ == "__main__":
