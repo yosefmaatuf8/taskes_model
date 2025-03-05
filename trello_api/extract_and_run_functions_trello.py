@@ -1,5 +1,5 @@
-from trello_api import TrelloAPI
-from db_manager import DBManager
+from trello_api.trello_api import TrelloAPI
+from db_manager.db_manager import DBManager
 from collections import defaultdict
 
 class ExtractAndRunFunctions:

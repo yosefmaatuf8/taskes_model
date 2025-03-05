@@ -11,7 +11,7 @@ from utils.utils import split_text
 from dotenv import load_dotenv
 import tiktoken
 from globals import GLOBALS
-from db_manager import DBManager
+from db_manager.db_manager import DBManager
 import io
 from tqdm import tqdm
 from embedding_handler import EmbeddingHandler

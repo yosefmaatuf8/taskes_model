@@ -1,38 +1,52 @@
-# AWS S3 operations (used for uploading recordings, etc.)
-boto3>=1.14.0
+# --- AWS SDK ---
+boto3>=1.14.0  # AWS S3 integration for uploading/downloading recordings
+botocore>=1.20.0  # Core AWS SDK functionalities
 
-# Loads environment variables from a .env file
-python-dotenv>=0.15.0
+# --- Google Cloud SDK ---
+google-cloud-storage>=2.1.0  # Google Cloud Storage SDK (for downloading audio)
+google-cloud-speech>=2.11.0  # Google Speech-to-Text API for transcriptions
+google-auth>=2.0.0  # Google authentication library
 
-# Audio processing and manipulation (e.g., converting audio formats, slicing audio)
-pydub>=0.24.0
+# --- OpenAI Integration ---
+openai>=0.27.0  # OpenAI API integration for transcription, summarization, task extraction
+tiktoken>=0.2.0  # Tokenizer for OpenAI's GPT models
 
-# OpenAI API integration (used for transcription, summarization, task extraction, etc.)
-openai>=0.27.0
+# --- Audio Processing ---
+pydub>=0.24.0  # Audio processing and conversion
+librosa>=0.9.2  # Audio feature extraction and analysis
+soundfile>=0.10.3  # Reading/writing WAV and FLAC files
+wave>=0.0.2  # Standard Python library for handling WAV files
 
-# Tokenizer for working with large language models like GPT-4
-tiktoken>=0.2.0
+# --- Machine Learning & NLP ---
+numpy>=1.20.0  # Numerical computing
+scipy>=1.6.0  # Scientific computing (distance metrics, etc.)
+tensorflow>=2.6.0  # Machine learning framework (if needed)
+transformers>=4.20.0  # Hugging Face transformers for NLP tasks
+torch>=1.9.0  # PyTorch, required by some ML models
+sentence-transformers>=2.2.0  # Sentence embeddings
 
-# Library for making HTTP requests
-requests>=2.25.1
+# --- Data Handling & Processing ---
+pandas>=1.2.0  # Data analysis and manipulation
+marshmallow>=3.0.0  # Data serialization and validation
+jsonschema>=3.2.0  # JSON validation and schema handling
 
-# Numerical computing library
-numpy>=1.20.0
+# --- Audio Diarization & Speaker Embeddings ---
+pyannote.audio>=2.1.1  # Speaker diarization (who spoke when)
+webrtcvad>=2.0.10  # Voice activity detection (VAD)
+torchvision>=0.10.0  # Image/audio feature processing (needed for diarization)
 
-# Scientific computing library for distance metrics and more
-scipy>=1.6.0
+# --- HTTP Requests & APIs ---
+requests>=2.25.1  # HTTP requests for API communication
+urllib3>=1.26.5  # URL handling and requests optimization
+httpx>=0.23.0  # Alternative HTTP client with async support
 
-# Progress bar for loops (e.g., processing audio chunks)
-tqdm>=4.50.0
+# --- CLI & Progress Indicators ---
+tqdm>=4.50.0  # Progress bar for loops (e.g., processing audio chunks)
+click>=8.0.0  # Command-line interface (CLI) tools
 
-# Audio diarization and embeddings
-pyannote.audio>=2.1.1
-
-# Data analysis and manipulation (e.g., reading/writing CSV files)
-pandas>=1.2.0
-
-# Machine learning framework (required by some modules)
-tensorflow>=2.6.0
-
-# Data serialization and validation library
-marshmallow>=3.0.0
+# --- Miscellaneous ---
+python-dotenv>=0.15.0  # Loads environment variables from a .env file
+ffmpeg-python>=0.2.0  # Python wrapper for FFmpeg (used for recording and audio processing)
+pillow>=9.0.0  # Image handling (sometimes required for ML models)
+dataclasses>=0.6  # Native Python data structures
+pathlib>=1.0.1  # File system handling

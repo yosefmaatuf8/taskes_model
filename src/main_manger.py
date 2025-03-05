@@ -94,12 +94,12 @@ class Manger:
             print("Aborting: No edited transcript.")
             return
         self.update_db()
+        self.daily_summary()
         if self.updated_for_trello:
             self.update_trello()
         if not self.updated_for_trello:
             print("Aborting: No updated trello data.")
 
-        self.daily_summary()
 
 
     def ran_for_chunks(self, start_time=0, end_time=0):

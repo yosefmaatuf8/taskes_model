@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 
 
 class GoogleCalendarHelper:
-    SERVICE_ACCOUNT_FILE = "/home/mefathim/PycharmProjects/taskes_model_v2/service_account.json"
+    SERVICE_ACCOUNT_FILE = "db/service_account.json"
     SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
     @staticmethod
