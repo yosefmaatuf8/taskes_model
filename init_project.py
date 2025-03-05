@@ -186,7 +186,7 @@ class InitProject:
         rows_tasks = [{"id": "", "topic": "", "name": "", "status": "", "assigned_user": ""}]
         rows_topics = [{"topic": "", "topic_status": "", "tasks_id": ""}]
         rows_full_data = [{"id": "", "topic": "", "name": "", "status": "", "assigned_user": "", "summary": ""}]
-        rows_meetings = [{"meeting_id": "", "transcription": "", "topics": ""}]
+        rows_meetings = [{"meeting_id": "", "transcription": "", "topics": "","meeting_datetime":""}]
 
         trello_users, trello_rows_full_data, trello_data = self.generate_db_rows()
 
