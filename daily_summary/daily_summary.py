@@ -5,9 +5,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from openai import OpenAI
-from db_manager import DBManager
+from db_manager.db_manager import DBManager
 from globals import GLOBALS
-from google_calendar_helper import GoogleCalendarHelper
+from .google_calendar_helper import GoogleCalendarHelper
 from utils.utils import split_text
 
 

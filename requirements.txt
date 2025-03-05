@@ -20,10 +20,6 @@ wave>=0.0.2  # Standard Python library for handling WAV files
 # --- Machine Learning & NLP ---
 numpy>=1.20.0  # Numerical computing
 scipy>=1.6.0  # Scientific computing (distance metrics, etc.)
-tensorflow>=2.6.0  # Machine learning framework (if needed)
-transformers>=4.20.0  # Hugging Face transformers for NLP tasks
-torch>=1.9.0  # PyTorch, required by some ML models
-sentence-transformers>=2.2.0  # Sentence embeddings
 
 # --- Data Handling & Processing ---
 pandas>=1.2.0  # Data analysis and manipulation
@@ -39,6 +35,7 @@ torchvision>=0.10.0  # Image/audio feature processing (needed for diarization)
 requests>=2.25.1  # HTTP requests for API communication
 urllib3>=1.26.5  # URL handling and requests optimization
 httpx>=0.23.0  # Alternative HTTP client with async support
+py-trello>=0.19.0
 
 # --- CLI & Progress Indicators ---
 tqdm>=4.50.0  # Progress bar for loops (e.g., processing audio chunks)

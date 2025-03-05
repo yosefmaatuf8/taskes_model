@@ -2,12 +2,12 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from post_transcription_data_processor import TranscriptionProcessing
-from extract_and_run_functions_trello import ExtractAndRunFunctions
+from trello_api.extract_and_run_functions_trello import ExtractAndRunFunctions
 from transcription_handler import TranscriptionHandler
-from daily_summary import DailySummary
+from daily_summary.daily_summary import DailySummary
 from init_project import InitProject
-from trello_api import TrelloAPI
-from db_manager import DBManager
+from trello_api.trello_api import TrelloAPI
+from db_manager.db_manager import DBManager
 from globals import GLOBALS
 import uuid
 import json
@@ -116,101 +116,9 @@ class Manger:
         self.run()
 
 if __name__ == "__main__":
-    test = Manger("/home/mefathim/PycharmProjects/taskes_model_v2/db/output/meeting_20250213_120422/full_meeting.wav")
-    path = "/home/mefathim/PycharmProjects/taskes_model_v2/db/output/transcription_test.json"
+    test = Manger("db/output/meeting_test.wav")
+    path = "db/output/transcription_test.json"
     with open(path, "r", encoding="utf-8") as f:
         test.transcription_json_str = json.dumps(json.load(f), ensure_ascii=False)
     test.meeting_datetime = "2025-02-26 12:30"
-
-
-    trello_list = str( {
-      "Streaming Task": {
-        "id": "list_1",
-        "cards": [
-          {
-            "id": "task_1",
-            "name": "Streaming has not started yet",
-            "status": "To Do",
-            "assigned_users": ["Amir"],
-            "description": "The task has not been completed yet; streaming needs to be started."
-          },
-          {
-            "id": "task_2",
-            "name": "Configure streaming and understand how it works",
-            "status": "In Progress",
-            "assigned_users": ["David"],
-            "description": "David is working on understanding how to set up streaming efficiently."
-          }
-        ]
-      },
-      "Internet-Dependent Tasks": {
-        "id": "list_2",
-        "cards": [
-          {
-            "id": "task_3",
-            "name": "Tasks that require extensive internet usage",
-            "status": "To Do",
-            "assigned_users": ["David"],
-            "description": "Various tasks that require significant internet resources."
-          }
-        ]
-      },
-      "Front-End Task": {
-        "id": "list_3",
-        "cards": [
-          {
-            "id": "task_4",
-            "name": "Improve front-end for better user experience",
-            "status": "To Do",
-            "assigned_users": ["David"],
-            "description": "Enhancements needed for a smoother front-end experience."
-          }
-        ]
-      },
-      "Computer Connection Task": {
-        "id": "list_4",
-        "cards": [
-          {
-            "id": "task_5",
-            "name": "Connect all computers to the project network",
-            "status": "Completed",
-            "assigned_users": ["David"],
-            "description": "David has successfully connected all computers to the network."
-          }
-        ]
-      },
-      "AWS Task": {
-        "id": "list_5",
-        "cards": [
-          {
-            "id": "task_6",
-            "name": "Investigate running the system outside AWS",
-            "status": "To Do",
-            "assigned_users": ["David"],
-            "description": "Need to explore ways to run the system outside the AWS environment."
-          }
-        ]
-      },
-      "Script Development": {
-        "id": "list_6",
-        "cards": [
-          {
-            "id": "task_7",
-            "name": "Develop automation scripts for efficiency",
-            "status": "To Do",
-            "assigned_users": ["David"],
-            "description": "Building automation tools to streamline work processes."
-          },
-          {
-            "id": "task_8",
-            "name": "Create scripts for data adaptation",
-            "status": "In Progress",
-            "assigned_users": ["David"],
-            "description": "David is working on scripts to adjust and format data."
-          }]
-
-      }
-    }
-    )
-    test.trello_list = trello_list
     test.run()
