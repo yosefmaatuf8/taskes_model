@@ -6,7 +6,7 @@ setup(
     author="yosef_maatuf",
     author_email="aiagentdaily8@gmail.com",
     description="A project management and task tracking system using AI and Trello API",
-    long_description=open("README.md").read(),
+    long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/yosefmaatuf8/taskes_model.git",  # Update with your actual repo URL
     packages=find_packages(),

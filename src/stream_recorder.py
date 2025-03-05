@@ -8,7 +8,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from globals import GLOBALS
-from src.main_manger import Manger  # Real-time transcription
+from src.main_manager import Manger  # Real-time transcription
 
 
 class StreamRecorder:
