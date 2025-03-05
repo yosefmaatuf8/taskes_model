@@ -1,89 +1,940 @@
-Trello Board Functions
-add_label(name, color) – Add a label to a board.
-add_list(name, pos=None) – Add a new list to a board.
-add_member(member, member_type='normal') – Add a member to the board.
-admin_members() – Retrieve all admin members of a board.
-all_cards() – Get all cards on a board.
-all_lists() – Get all lists on a board.
-all_members() – Get all members of a board.
-closed_cards() – Get all closed cards on a board.
-closed_lists() – Get all closed lists on a board.
-fetch_actions(action_filter, action_limit=50, before=None, since=None) – Fetch board actions with filters.
-get_cards(filters=None, card_filter='') – Get filtered cards from a board.
-get_checklists(cards='all') – Get all checklists on a board.
-get_labels(fields='all', limit=50) – Retrieve labels from a board.
-get_last_activity() – Get the timestamp of the last action on the board.
-get_list(list_id) – Retrieve a specific list from a board.
-get_lists(list_filter) – Get lists based on a filter.
-get_members(filters=None) – Retrieve members with filters.
-list_lists(list_filter='all') – Get lists matching a filter.
-normal_members() – Retrieve all normal board members.
-open_cards() – Get all open cards on a board.
-open_lists() – Get all open lists on a board.
-owner_members() – Get all board owners.
-remove_member(member) – Remove a member from a board.
-set_description(desc) – Set the board description.
-set_name(name) – Rename the board.
-Trello Card Functions
-add_checklist(title, items, itemstates=None) – Add a checklist to a card.
-add_label(label) – Attach a label to a card.
-add_member(member) – Assign a member to a card.
-assign(member_id) – Assign a member by ID.
-attach(name=None, mimeType=None, file=None, url=None) – Add an attachment (file or URL).
-change_board(board_id, list_id=None) – Move a card to another board.
-change_list(list_id) – Move a card to another list.
-comment(comment_text) – Add a comment to a card.
-fetch(eager=True) – Fetch card details.
-fetch_actions(action_filter='createCard', since=None, before=None) – Fetch card actions.
-fetch_attachments(force=False) – Retrieve card attachments.
-fetch_checklists() – Get checklists associated with a card.
-fetch_comments(force=False, limit=None) – Get all comments on a card.
-get_attachments() – Get all attachments on a card.
-get_comments() – Alias for fetching comments.
-get_list() – Get the list a card belongs to.
-remove_attachment(attachment_id) – Remove an attachment by ID.
-remove_due() – Remove a due date from a card.
-remove_label(label) – Remove a label from a card.
-remove_member(member) – Unassign a member from a card.
-set_closed(closed) – Archive or unarchive a card.
-set_description(description) – Set the card description.
-set_due(due) – Set a due date.
-set_name(new_name) – Rename the card.
-set_pos(pos) – Change card position in a list.
-Trello Checklist Functions
-add_checklist_item(name, checked=False) – Add an item to a checklist.
-clear() – Remove all items from a checklist.
-delete() – Delete a checklist.
-delete_checklist_item(name) – Remove an item from a checklist.
-rename(new_name) – Rename a checklist.
-rename_checklist_item(name, new_name) – Rename an item within a checklist.
-set_checklist_item(name, checked) – Mark an item as checked/unchecked.
-Trello List Functions
-add_card(name, desc=None, labels=None, due='null', source=None, position=None, assign=None) – Add a card to a list.
-archive_all_cards() – Archive all cards in a list.
-fetch() – Fetch details for a list.
-list_cards(card_filter='open', actions=None) – Get all cards from a list.
-move(position) – Move a list within the board.
-move_all_cards(destination_list) – Move all cards to another list.
-set_name(name) – Rename a list.
-set_pos(position) – Change the position of a list.
-Trello Organization Functions
-all_boards() – Retrieve all boards in an organization.
-fetch() – Fetch organization details.
-get_board(field_name) – Get a board by field name.
-get_boards(list_filter) – Get boards using a filter.
-get_members() – Get members of the organization.
-Trello API Client Functions
-add_board(board_name, source_board=None, organization_id=None, permission_level='private') – Create a new board.
-create_hook(callback_url, id_model, desc=None, token=None) – Create a webhook.
-fetch_json(uri_path, http_method='GET', headers=None, query_params=None, post_args=None, files=None) – Fetch JSON data from the Trello API.
-get_board(board_id) – Get a board by ID.
-get_card(card_id) – Get a card by ID.
-get_label(label_id, board_id) – Retrieve a label by ID.
-get_list(list_id) – Get a list by ID.
-get_member(member_id) – Retrieve a member by ID.
-get_organization(organization_id) – Get an organization by ID.
-list_boards(board_filter='all') – Get all boards for the user.
-list_organizations() – Get all organizations for the user.
-logout() – Log out from Trello.
-search(query, partial_match=False, models=[], board_ids=[], org_ids=[], card_ids=[]) – Search for Trello objects.
+Module: trello.attachments
+Class: Attachments
+Description:
+Represents an attachment associated with a Trello card or board. Inherits from TrelloBase.
+
+Attributes:
+
+id
+bytes
+date
+edge_color
+idMember
+is_upload
+mime_type
+name
+previews
+url
+Methods:
+
+from_json(json_obj)
+Description: Deserializes a JSON object into an Attachments instance.
+Parameters:
+json_obj: JSON object representing the attachment.
+Return: An instance of Attachments.
+Class: AttachmentsPreview
+Description:
+Represents a preview version of an attachment.
+
+Attributes:
+
+bytes
+url
+width
+height
+is_scaled
+Methods:
+
+from_json(json_obj)
+Description: Deserializes a JSON object into an AttachmentsPreview instance.
+Parameters:
+json_obj: JSON object representing the preview data.
+Return: An instance of AttachmentsPreview.
+Module: trello.base
+Class: TrelloBase
+Description:
+Base class for Trello objects. Provides common functionality inherited by many other classes.
+Attributes:
+(No explicit attributes documented; acts as a common ancestor.)
+Methods:
+(Common utility methods are provided by subclasses and via inheritance.)
+Module: trello.board
+Class: Board
+Description:
+Represents a Trello board. Its basic attributes (such as id, name, etc.) are stored directly, but sub-objects (Lists, Cards) are fetched via API calls.
+
+Attributes:
+
+client
+board_id
+organization
+name
+Methods:
+
+add_label(name, color)
+
+Description: Adds a new label to the board.
+Parameters:
+name: The label’s name.
+color: Color of the label (e.g., green, yellow, orange, red, purple, blue, sky, lime, pink, or black).
+Return: A Label instance.
+add_list(name, pos=None)
+
+Description: Adds a new list to the board.
+Parameters:
+name: Name for the new list.
+pos: Position in the board (can be “bottom”, “top”, or a positive number).
+Return: A List instance.
+add_member(member, member_type='normal')
+
+Description: Adds a member to the board with an optional member type.
+Parameters:
+member: The member (object or identifier) to add.
+member_type: Type of membership (default is 'normal').
+
+admin_members()
+
+Description: Returns all admin members on the board.
+Parameters: None
+Return: List of Member objects.
+all_cards()
+
+Description: Retrieves all cards on the board.
+Parameters: None
+Return: List of Card objects.
+all_lists()
+
+Description: Retrieves all lists on the board.
+Parameters: None
+Return: List of List objects.
+all_members()
+
+Description: Retrieves all members associated with the board.
+Parameters: None
+Return: List of Member objects.
+close()
+
+Description: Closes the board.
+Parameters: None
+ 
+closed_cards()
+
+Description: Retrieves all closed cards on the board.
+Parameters: None
+Return: List of Card objects.
+closed_lists()
+
+Description: Retrieves all closed lists on the board.
+Parameters: None
+Return: List of List objects.
+fetch()
+
+Description: Fetches all attributes for the board.
+Parameters: None
+ 
+fetch_actions(action_filter, action_limit=50, before=None, since=None)
+
+Description: Retrieves all actions on the board that match the given filters.
+Parameters:
+action_filter: A comma-separated string of action types (e.g., 'createCard,updateCard').
+action_limit: Maximum number of actions to return (default is 50).
+before: A datetime object to filter actions before a specific time.
+since: A datetime object to filter actions after a specific time.
+Return: A JSON list of past actions.
+－ from_json(trello_client=None, organization=None, json_obj=None) [classmethod]
+
+Description: Deserializes a board JSON object into a Board instance.
+
+Parameters:
+
+trello_client: The Trello client instance (optional).
+organization: The organization object that the board belongs to (optional).
+json_obj: The JSON representation of the board.
+Return: A Board instance.
+
+get_cards(filters=None, card_filter='')
+
+Description: Retrieves cards from the board with optional filtering.
+Parameters:
+filters: A dict of query parameters (e.g., {'fields': 'all'}).
+card_filter: Filter on card status ('open', 'closed', or 'all').
+Return: List of Card objects.
+get_checklists(cards='all')
+
+Description: Retrieves all checklists associated with the board.
+Parameters:
+cards: Filter for checklists (default is 'all').
+Return: List of Checklist objects.
+get_labels(fields='all', limit=50)
+
+Description: Retrieves labels from the board.
+Parameters:
+fields: Which fields to return (default is 'all').
+limit: Maximum number of labels to return (default is 50).
+Return: List of Label objects.
+get_last_activity()
+
+Description: Returns the date of the board’s last action.
+Parameters: None
+Return: A datetime object.
+get_list(list_id)
+
+Description: Retrieves a specific list by its ID from the board.
+Parameters:
+list_id: The unique identifier of the list.
+Return: A List instance.
+get_lists(list_filter)
+
+Description: Retrieves lists from the board using a specified filter.
+Parameters:
+list_filter: Filter criteria for lists.
+Return: List of List objects.
+get_members(filters=None)
+
+Description: Retrieves board members using optional filtering parameters.
+Parameters:
+filters: A dict of parameters (e.g., {'fields': 'all', 'filter': 'admins'}).
+Return: List of Member objects.
+list_lists(list_filter='all')
+
+Description: Returns lists on the board according to the filter (default 'all').
+Parameters:
+list_filter: Filter criteria (default is 'all').
+Return: List of List objects.
+normal_members()
+
+Description: Returns all “normal” (non-admin, non-owner) members on the board.
+Parameters: None
+Return: List of Member objects.
+open_cards()
+
+Description: Retrieves all open cards on the board.
+Parameters: None
+Return: List of Card objects.
+open_lists()
+
+Description: Retrieves all open lists on the board.
+Parameters: None
+Return: List of List objects.
+owner_members()
+
+Description: Returns all owner members on the board.
+Parameters: None
+Return: List of Member objects.
+remove_member(member)
+
+Description: Removes a specified member from the board.
+Parameters:
+member: The member to remove.
+ 
+save()
+
+Description: Saves any changes made to the board.
+Parameters: None
+ 
+set_description(desc)
+
+Description: Updates the board’s description.
+Parameters:
+desc: The new description text.
+ 
+set_name(name)
+
+Description: Updates the board’s name.
+Parameters:
+name: The new name for the board.
+ 
+Module: trello.card
+Class: Card
+Description:
+Represents a Trello card. The card’s basic attributes (e.g. id, name) are stored on the object, while related sub-objects (comments, checklists, attachments) are fetched via API calls.
+
+Attributes:
+
+parent (the list to which the card belongs)
+card_id
+name
+attachments (lazily loaded)
+checklists (lazily loaded)
+comments (lazily loaded)
+board_id
+card_created_date (creation date based on card id)
+created_date
+date_last_activity
+idLabels
+latestCardMove_date
+list_id
+list_labels
+member_id
+short_id
+short_url
+Methods:
+
+add_checklist(title, items, itemstates=None)
+
+Description: Adds a checklist to the card.
+Parameters:
+title: Title of the checklist.
+items: List of item names.
+itemstates: (Optional) List of booleans indicating the checked state of each item.
+Return: The checklist object.
+add_label(label)
+
+Description: Adds a label to the card.
+Parameters:
+label: The label (or its ID) to add.
+ 
+add_member(member)
+
+Description: Adds a member to the card.
+Parameters:
+member: The member (or member ID) to add.
+ 
+assign(member_id)
+
+Description: Assigns a member (by ID) to the card.
+Parameters:
+member_id: The identifier of the member.
+ 
+attach(name=None, mimeType=None, file=None, url=None)
+
+Description: Attaches a file or URL to the card.
+Parameters:
+name: (Optional) Name for the attachment.
+mimeType: (Optional) MIME type for the attachment.
+file: A file-like binary object supporting read().
+url: (Optional) URL of the resource to attach.
+Return: (Typically, the newly added attachment.)
+change_board(board_id, list_id=None)
+
+Description: Moves the card to a different board (optionally into a specific list on that board).
+Parameters:
+board_id: ID of the target board.
+list_id: (Optional) ID of the target list.
+ 
+change_list(list_id)
+
+Description: Moves the card to a different list within the board.
+Parameters:
+list_id: ID of the target list.
+ 
+change_pos(position)
+
+Description: Changes the card’s position within its list.
+Parameters:
+position: New position (either 'top', 'bottom', or an integer).
+ 
+comment(comment_text)
+
+Description: Adds a comment to the card.
+Parameters:
+comment_text: The text of the comment.
+ 
+delete()
+
+Description: Deletes the card.
+Parameters: None
+ 
+delete_comment(comment)
+
+Description: Deletes a specified comment from the card.
+Parameters:
+comment: The comment to delete.
+ 
+fetch(eager=True)
+
+Description: Fetches all attributes for the card. If eager is true, sub-objects (comments, checklists, attachments) are also fetched immediately.
+Parameters:
+eager: Boolean flag (default is True).
+ 
+fetch_actions(action_filter='createCard', since=None, before=None)
+
+Description: Fetches actions for the card based on provided filters.
+Parameters:
+action_filter: Filter string for actions (default is 'createCard').
+since: (Optional) Datetime to filter actions after.
+before: (Optional) Datetime to filter actions before.
+Return: JSON list of actions.
+fetch_attachments(force=False)
+
+Description: Fetches the card’s attachments, with an option to force a refresh.
+Parameters:
+force: Boolean flag (default is False).
+ 
+fetch_checklists()
+
+Description: Fetches the card’s checklists.
+Parameters: None
+ 
+fetch_comments(force=False, limit=None)
+
+Description: Fetches the card’s comments.
+Parameters:
+force: Boolean flag to force fetch (default is False).
+limit: (Optional) Maximum number of comments to fetch.
+ 
+fetch_plugin_data()
+
+Description: Fetches any plugin data associated with the card.
+Parameters: None
+ 
+from_json(parent, json_obj) [classmethod]
+
+Description: Deserializes a JSON object into a Card instance.
+Parameters:
+parent: The list object that the card belongs to.
+json_obj: JSON object representing the card.
+Return: A Card instance.
+get_attachments()
+
+Description: Retrieves attachments for the card.
+Parameters: None
+ 
+get_comments()
+
+Description: Alias for fetch_comments() (ensuring a server call for up-to-date comments).
+Parameters: None
+ 
+get_list()
+
+Description: Retrieves the list to which the card belongs.
+Parameters: None
+Return: A List instance.
+get_stats_by_list(lists, list_cmp=None, done_list=None, time_unit='seconds', card_movements_filter=None)
+
+Description: Calculates various statistics about the card’s movement between lists (e.g., time spent, forward/backward moves).
+Parameters:
+lists: List of board lists.
+list_cmp: (Optional) Comparison function for lists.
+done_list: (Optional) List indicating task completion; time measurement stops if in this list.
+time_unit: Time unit for calculations ('seconds', 'minutes', or 'hours'; default is 'seconds').
+card_movements_filter: (Optional) A pair of dates (strings in YYYY-MM-DD) to filter movements.
+Return: A dictionary of the form
+python
+Copy
+{ list_id: { 'time': <time in unit>, 'forward_moves': <int>, 'backward_moves': <int> } }
+listCardMove_date()
+
+Description: Returns the history of card transitions as a list of triplets (starting list, ending list, and transition date).
+Parameters: None
+Return: List of lists (each sublist: [source_list, destination_list, date]).
+list_movements(list_cmp=None, filter_by_date_interval=None)
+
+Description: Retrieves the history of list transitions for the card as a list of dictionaries.
+Parameters:
+list_cmp: (Optional) Comparison function between lists.
+filter_by_date_interval: (Optional) Pair of dates (YYYY-MM-DD) to filter the movements.
+Return: List of dictionaries with keys such as source, destination, and datetime.
+remove_attachment(attachment_id)
+
+Description: Removes an attachment from the card.
+Parameters:
+attachment_id: The ID of the attachment to remove.
+Return: None.
+remove_due()
+
+Description: Removes the due date/time from the card.
+Parameters: None
+Return: None.
+remove_due_complete()
+
+Description: Removes the “due complete” flag from the card.
+Parameters: None
+Return: None.
+remove_label(label)
+
+Description: Removes a label from the card.
+Parameters:
+label: The label (or its ID) to remove.
+ 
+remove_member(member)
+
+Description: Removes a member from the card.
+Parameters:
+member: The member (or member ID) to remove.
+ 
+set_closed(closed)
+
+Description: Sets the card’s closed state.
+Parameters:
+closed: Boolean indicating whether the card is closed.
+ 
+set_description(description)
+
+Description: Updates the card’s description.
+Parameters:
+description: The new description text.
+ 
+set_due(due)
+
+Description: Sets the due date/time for the card.
+Parameters:
+due: A datetime object.
+ 
+set_due_complete()
+
+Description: Marks the due date as complete.
+Parameters: None
+Return: None.
+set_name(new_name)
+
+Description: Updates the card’s name.
+Parameters:
+new_name: The new name string.
+ 
+set_pos(pos)
+
+Description: Changes the card’s position within its list.
+Parameters:
+pos: New position ('top', 'bottom', or an integer).
+ 
+subscribe()
+
+Description: Subscribes to updates for the card.
+Parameters: None
+ 
+unassign(member_id)
+
+Description: Unassigns a member from the card by their ID.
+Parameters:
+member_id: The identifier of the member.
+ 
+update_comment(comment_id, comment_text)
+
+Description: Updates an existing comment on the card.
+Parameters:
+comment_id: The ID of the comment to update.
+comment_text: The new text for the comment.
+ 
+Module: trello.checklist
+Class: Checklist
+Description:
+Represents a checklist attached to a Trello card. Inherits from TrelloBase.
+
+Attributes:
+
+client
+checked
+obj
+trello_card (optional; the card this checklist is attached to)
+Methods:
+
+add_checklist_item(name, checked=False)
+
+Description: Adds an item to the checklist.
+Parameters:
+name: The name of the checklist item.
+checked: (Optional) Boolean indicating if the item should be marked as checked (default is False).
+Return: The checklist item as a JSON object.
+clear()
+
+Description: Clears the checklist by removing all items.
+Parameters: None
+ 
+delete()
+
+Description: Deletes the checklist entirely.
+Parameters: None
+ 
+delete_checklist_item(name)
+
+Description: Deletes a specific item from the checklist.
+Parameters:
+name: The name of the checklist item to delete.
+ 
+rename(new_name)
+
+Description: Renames the checklist.
+Parameters:
+new_name: The new name for the checklist.
+ 
+rename_checklist_item(name, new_name)
+
+Description: Renames an item within the checklist.
+Parameters:
+name: Current name of the item.
+new_name: New name for the item.
+ 
+set_checklist_item(name, checked)
+
+Description: Sets the checked state of a checklist item.
+Parameters:
+name: Name of the checklist item.
+checked: Boolean indicating the desired state.
+ 
+Module: trello.compat
+Function: force_str(s, encoding='utf-8')
+Description:
+Converts the input s to a string type regardless of the Python version. Useful for ensuring that repr returns the proper string type.
+Parameters:
+s: The input to convert.
+encoding: Encoding to use (default is 'utf-8').
+Return: A string representation of s.
+Module: trello.exceptions
+Class: ResourceUnavailable
+Description:
+Exception representing a failed request to a Trello resource.
+Attributes:
+msg
+http_response
+Methods:
+(Inherits from Python’s built-in Exception.)
+Class: TokenError
+Description:
+Exception representing an error with token processing.
+Attributes/Methods:
+(Inherits from Exception.)
+Class: Unauthorized
+Description:
+Exception for unauthorized access errors. Inherits from ResourceUnavailable.
+Attributes:
+msg
+http_response
+Methods:
+(Inherits from ResourceUnavailable.)
+Module: trello.label
+Class: Label
+Description:
+Represents a Trello label. Inherits from TrelloBase.
+
+Attributes:
+
+client
+label_id
+name
+color (optional; default is an empty string)
+Methods:
+
+fetch()
+
+Description: Fetches all attributes for this label from Trello.
+Parameters: None
+ 
+from_json(board, json_obj) [classmethod]
+
+Description: Deserializes a label JSON object into a Label instance.
+Parameters:
+board: The parent board for the label.
+json_obj: The JSON representation of the label.
+Return: A Label instance.
+from_json_list(board, json_objs) [classmethod]
+
+Description: Deserializes a list of label JSON objects into a list of Label instances.
+Parameters:
+board: The parent board.
+json_objs: List of JSON label objects.
+Return: List of Label objects.
+Module: trello.member
+Class: Member
+Description:
+Represents a Trello member. Inherits from TrelloBase.
+
+Attributes:
+
+client
+member_id
+full_name
+Methods:
+
+fetch()
+
+Description: Fetches all attributes for this member.
+Parameters: None
+ 
+fetch_cards()
+
+Description: Retrieves all cards associated with the member.
+Parameters: None
+ 
+fetch_comments()
+
+Description: Retrieves comments made by the member.
+Parameters: None
+ 
+fetch_notifications(filters=[])
+
+Description: Fetches notifications for the member using optional filters.
+Parameters:
+filters: List of filters (default is an empty list).
+ 
+from_json(trello_client, json_obj) [classmethod]
+
+Description: Deserializes a member JSON object into a Member instance.
+Parameters:
+trello_client: The Trello client instance.
+json_obj: JSON object representing the member.
+Return: A Member instance.
+Module: trello.organization
+Class: Organization
+Description:
+Represents a Trello organization. Inherits from TrelloBase.
+
+Attributes:
+
+client
+organization_id
+name
+TIMEZONE (class attribute, default is None)
+Methods:
+
+all_boards()
+
+Description: Retrieves all boards within the organization.
+Parameters: None
+ 
+fetch()
+
+Description: Fetches all attributes for the organization.
+Parameters: None
+ 
+from_json(trello_client, json_obj) [classmethod]
+
+Description: Deserializes a JSON object into an Organization instance.
+Parameters:
+trello_client: The Trello client instance.
+json_obj: JSON representation of the organization.
+Return: An Organization instance.
+get_board(field_name)
+
+Description: Retrieves board(s) based on a field name.
+Parameters:
+field_name: The field used to filter boards.
+Return: List of Board objects.
+get_boards(list_filter)
+
+Description: Retrieves boards using a specified filter.
+Parameters:
+list_filter: Filter criteria.
+Return: List of Board objects.
+get_members()
+
+Description: Retrieves all members of the organization.
+Parameters: None
+ 
+Module: trello.trelloclient
+Class: TrelloClient
+Description:
+Base class for accessing the Trello API.
+
+Attributes:
+
+api_key
+api_secret (optional)
+token (optional)
+token_secret (optional)
+Methods:
+
+add_board(board_name, source_board=None, organization_id=None, permission_level='private')
+
+Description: Creates a new board.
+Parameters:
+board_name: Name for the new board.
+source_board: (Optional) A board to copy.
+organization_id: (Optional) Organization under which to create the board.
+permission_level: Permission level (default is 'private').
+Return: A Board instance.
+create_hook(callback_url, id_model, desc=None, token=None)
+
+Description: Creates a new webhook. (Note: There’s a known bug with httplib2; urllib2 is used instead.)
+Parameters:
+callback_url: The URL to be called on webhook events.
+id_model: The ID of the model to watch.
+desc: (Optional) Description of the hook.
+token: (Optional) Token to use.
+Return: A WebHook object.
+fetch_json(uri_path, http_method='GET', headers=None, query_params=None, post_args=None, files=None)
+
+Description: Fetches JSON data from Trello via the API.
+Parameters:
+uri_path: API endpoint path.
+http_method: HTTP method to use (default is 'GET').
+headers: (Optional) Dictionary of HTTP headers.
+query_params: (Optional) Dictionary of query parameters.
+post_args: (Optional) POST data.
+files: (Optional) Files to upload.
+Return: JSON data.
+get_board(board_id)
+
+Description: Retrieves a board by its ID.
+Parameters:
+board_id: The board’s unique identifier.
+Return: A Board instance.
+get_card(card_id)
+
+Description: Retrieves a card by its ID.
+Parameters:
+card_id: The card’s unique identifier.
+Return: A Card instance.
+get_label(label_id, board_id)
+
+Description: Retrieves a label by its ID given the parent board ID.
+Parameters:
+label_id: The label’s unique identifier.
+board_id: The ID of the board the label belongs to.
+Return: A Label instance.
+get_list(list_id)
+
+Description: Retrieves a list by its ID.
+Parameters:
+list_id: The list’s unique identifier.
+Return: A List instance.
+get_member(member_id)
+
+Description: Retrieves a member by their ID.
+Parameters:
+member_id: The member’s unique identifier.
+Return: A Member instance.
+get_organization(organization_id)
+
+Description: Retrieves an organization by its ID.
+Parameters:
+organization_id: The organization’s unique identifier.
+Return: An Organization instance.
+info_for_all_boards(actions)
+
+Description: Retrieves information for all boards in one call.
+Parameters:
+actions: Additional action parameters.
+ 
+list_boards(board_filter='all')
+
+Description: Lists all boards for the current Trello user.
+Parameters:
+board_filter: Filter criteria (default is 'all').
+Return: List of Board objects (with attributes like id, name, desc, closed, and url).
+list_hooks(token=None)
+
+Description: Lists all webhooks associated with a token.
+Parameters:
+token: (Optional) Token to filter hooks; if not provided, uses the client’s token.
+Return: List of webhook objects.
+list_organizations()
+
+Description: Lists all organizations for the current Trello user.
+Parameters: None
+Return: List of Organization objects (with attributes such as id, name, desc, closed, and url).
+logout()
+
+Description: Logs out of Trello.
+Parameters: None
+ 
+search(query, partial_match=False, models=[], board_ids=[], org_ids=[], card_ids=[])
+
+Description: Searches Trello for objects matching the query.
+Parameters:
+query: A query string (up to 16K characters).
+partial_match: If True, searches for content that starts with any of the query words.
+models: List of object types to search (e.g., 'actions', 'boards', 'cards', 'members', or 'organizations').
+board_ids: (Optional) List of board IDs to limit the search.
+org_ids: (Optional) List of organization IDs to limit the search.
+card_ids: (Optional) List of card IDs to limit the search.
+Return: A list of matching objects (each with minimal attributes; a full fetch is required for complete data).
+Module: trello.trellist
+Class: List
+Description:
+Represents a Trello list. While basic list attributes are stored on the object, accessing cards requires an API call. Inherits from TrelloBase.
+
+Attributes:
+
+board (the parent board)
+list_id
+name
+Methods:
+
+add_card(name, desc=None, labels=None, due='null', source=None, position=None, assign=None)
+
+Description: Adds a new card to the list.
+Parameters:
+name: Name for the card.
+desc: (Optional) Description of the card.
+labels: (Optional) List of label IDs to add.
+due: (Optional) Due date (default is 'null').
+source: (Optional) Card ID to clone from.
+position: (Optional) Card position in the list ('top', 'bottom', or a positive number).
+assign: (Optional) Member assignment.
+Return: A Card instance.
+archive_all_cards()
+
+Description: Archives all cards in the list.
+Parameters: None
+ 
+cardsCnt()
+
+Description: Returns the count of cards in the list.
+Parameters: None
+ 
+close()
+
+Description: Closes the list.
+Parameters: None
+ 
+fetch()
+
+Description: Fetches all attributes for the list from Trello.
+Parameters: None
+fetch_actions(action_filter)
+
+Description: Retrieves actions for the list that match the given filter.
+Parameters:
+action_filter: Filter criteria for actions.
+Return: A JSON list of actions.
+from_json(board, json_obj) [classmethod]
+
+Description: Deserializes a JSON object into a List instance.
+Parameters:
+board: The parent board.
+json_obj: JSON object representing the list.
+Return: A List instance.
+list_cards(card_filter='open', actions=None)
+
+Description: Lists all cards in the list based on the given filter.
+Parameters:
+card_filter: Card status filter (default is 'open').
+actions: (Optional) Additional action parameters.
+Return: List of Card objects.
+move(position)
+
+Description: Moves the list to a new position on the board.
+Parameters:
+position: New position value.
+move_all_cards(destination_list)
+
+Description: Moves all cards from this list to another specified list.
+Parameters:
+destination_list: The target List object.
+open()
+
+Description: Re-opens the list if it was previously closed.
+Parameters: None
+set_name(name)
+
+Description: Updates the list’s name.
+Parameters:
+name: The new name for the list.
+set_pos(position)
+
+Description: Updates the list’s position on the board.
+Parameters:
+position: New position ('top', 'bottom', or a positive number).
+
+Module: trello.util
+Function: create_oauth_token(expiration=None, scope=None, key=None, secret=None, name=None, output=True)
+Description:
+Script to obtain an OAuth token from Trello. It requires the environment variables for TRELLO_API_KEY and TRELLO_API_SECRET and can use TRELLO_EXPIRATION to set the token’s lifetime (defaulting to 30 days if not set).
+Parameters:
+expiration: (Optional) Token expiration time.
+scope: (Optional) Token scope.
+key: The API key.
+secret: The API secret.
+name: (Optional) Name for the token.
+output: Boolean flag indicating whether to output the token (default is True).
+Return: The OAuth token as a string.
+
+Module: trello.webhook
+Class: WebHook
+Description:
+Represents a Trello webhook.
+Attributes:
+
+client
+token
+hook_id (optional)
+desc (optional)
+id_model (the model being watched)
+callback_url
+active (boolean indicating if the hook is active)
+Methods:
+
+delete()
+Description: Removes the webhook from Trello.
+Parameters: None
