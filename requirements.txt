@@ -47,3 +47,4 @@ ffmpeg-python>=0.2.0  # Python wrapper for FFmpeg (used for recording and audio 
 pillow>=9.0.0  # Image handling (sometimes required for ML models)
 dataclasses>=0.6  # Native Python data structures
 pathlib>=1.0.1  # File system handling
+google-api-python-client>=2.0.0

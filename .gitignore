@@ -6,3 +6,4 @@ __pycache__/
 *.db
 venv/
 node_modules/
+db/service_account.json
