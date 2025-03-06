@@ -10,8 +10,10 @@ from db_manager.db_manager import DBManager
 class TranscriptionProcessing:
     def __init__(self):
         self.client = OpenAI(api_key=GLOBALS.openai_api_key)
-        self.max_tokens = GLOBALS.max_tokens - 500  # Safety margin to prevent response truncation
-        self.tokenizer = tiktoken.encoding_for_model("gpt-4")
+        self.openai_model_name = GLOBALS.openai_model_name
+        self.max_tokens_response = 20000
+        self.max_tokens = GLOBALS.max_tokens - self.max_tokens_response        
+        self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
         self.db_manager = DBManager()
 
     def process_transcription(self, transcription_data):
@@ -77,12 +79,12 @@ class TranscriptionProcessing:
 
             try:
                 response = self.client.chat.completions.create(
-                    model="gpt-4",
+                    model=self.openai_model_name,
                     messages=[
                         {"role": "system", "content": "You analyze Hebrew meeting transcriptions and return structured English output."},
                         {"role": "user", "content": prompt}
                     ],
-                    max_tokens=4000,
+                    max_tokens=self.max_tokens_response,
                     temperature=0.2
                 )
 

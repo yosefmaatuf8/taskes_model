@@ -20,6 +20,7 @@ class TranscriptionHandler:
     def __init__(self, wav_path=None, output_dir=GLOBALS.output_path, output_file=None, language=GLOBALS.language):
         self.transcription_for_ask_model = None
         self.output_dir = output_dir
+        self.openai_model_name = GLOBALS.openai_model_name
         self.names_context = ''
         self.output_file = output_file
         self.db_manager = DBManager()
@@ -28,9 +29,10 @@ class TranscriptionHandler:
         self.users_name_trello = GLOBALS.users_name_trello
         self.language = language
         self.wav_path = wav_path
-        self.tokenizer = tiktoken.encoding_for_model("gpt-4")
+        self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
         self.audio_helper = Audio()
-        self.max_tokens = int(GLOBALS.max_tokens)
+        self.max_tokens_response = 1000
+        self.max_tokens = GLOBALS.max_tokens - self.max_tokens_response
         self.output_path_json = None
         self.output_path_txt = None
         self.max_size = 20  # Maximum audio duration per segment in mb
@@ -178,7 +180,7 @@ class TranscriptionHandler:
         response = requests.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {self.openai_api_key}"},
-            json={"model": "gpt-4", "messages": messages, "max_tokens": 300, "temperature": 0},
+            json={"model": self.openai_model_name, "messages": messages, "max_tokens": self.max_tokens_response, "temperature": 0},
         )
         if response.status_code != 200:
             print(f"Error in OpenAI response: {response.status_code}, {response.text}")

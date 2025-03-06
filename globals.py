@@ -12,6 +12,7 @@ class Globals:
         self.manager_email = self.validate_env("MANAGER_EMAIL")
         self.max_tokens = int(self.validate_env("MAX_TOKENS"))
         self.openai_api_key = self.validate_env("OPENAI_API_KEY")
+        self.openai_model_name = self.validate_env("OPENAI_MODEL_NAME")
         self.huggingface_api_key = self.validate_env("HUGGINGFACE_API_KEY")
         self.functions_dict = functions_dict
         self.db_path = self.validate_path("DB_PATH")

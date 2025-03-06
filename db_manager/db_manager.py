@@ -12,7 +12,9 @@ from utils.utils import extract_json_from_code_block, split_text
 class DBManager:
     def __init__(self):
         self.updated_for_trello = None
-        self.tokenizer = tiktoken.encoding_for_model("gpt-4")
+        self.openai_model_name = GLOBALS.openai_model_name
+
+        self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
         self.updated_tasks_log = {}
         self.data_topics_and_tasks = None
         self.existing_topics = None
@@ -207,14 +209,14 @@ class DBManager:
         '''
 
         response = self.client.chat.completions.create(
-            model="gpt-4",
+            model=self.openai_model_name,
             messages=[
                 {"role": "system",
                  "content": "You are a structured data extraction assistant capable of processing Hebrew."},
                 {"role": "system", "content": f"This is the list of users and their usernames: {self.users_data_str}"},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=4000,
+            max_tokens=20000,
             temperature=0.1
         )
         return extract_json_from_code_block(response.choices[0].message.content)
@@ -294,9 +296,9 @@ class DBManager:
 
         # Send the prompt to GPT
         response = self.client.chat.completions.create(
-            model="gpt-4",
+            model=self.openai_model_name,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=2000,
+            max_tokens=20000,
             temperature=0.2
         )
 

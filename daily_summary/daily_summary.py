@@ -18,12 +18,13 @@ class DailySummary:
         load_dotenv()
         self.sender_email = sender_email
         self.sender_password = sender_password
-        print(self.sender_password)
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
         self.client = OpenAI(api_key=GLOBALS.openai_api_key)
-        self.tokenizer = tiktoken.encoding_for_model("gpt-4")
-        self.max_tokens = GLOBALS.max_tokens - 500  # Buffer space
+        self.openai_model_name = GLOBALS.openai_model_name
+        self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
+        self.max_tokens_response = 15000
+        self.max_tokens = GLOBALS.max_tokens - self.max_tokens_response
         self.from_email = self.sender_email
         self.db_manager = DBManager()
 
@@ -52,7 +53,7 @@ class DailySummary:
                 response = self.client.chat.completions.create(
                     model="gpt-4",
                     messages=[{"role": "user", "content": prompt_template + f"\n\n**Chunk:**\n{chunk}"}],
-                    max_tokens=1500,
+                    max_tokens=self.max_tokens_response,
                     temperature=0.2
                 )
                 chunk_summary = response.choices[0].message.content.strip()
@@ -63,7 +64,7 @@ class DailySummary:
             response = self.client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt_template}],
-                max_tokens=2000,
+                max_tokens=self.max_tokens_response,
                 temperature=0.2
             )
             return response.choices[0].message.content.strip()
