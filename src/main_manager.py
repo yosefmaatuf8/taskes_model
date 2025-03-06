@@ -22,7 +22,7 @@ class Manger:
         self.meeting_datetime = None
         self.db_manager = DBManager()
 
-        # self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
+        self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
         self.transcription_json_str = None
 
         self.post_transcription = TranscriptionProcessing()
@@ -36,7 +36,7 @@ class Manger:
 
             GLOBALS.users_name_trello = self.trello_api_employees.get_usernames()
             GLOBALS.id_users_name_trello = self.trello_api_employees.get_id_and_usernames()
-            GLOBALS.list_tasks = self.trello_list  # self.trello_api_employees.get_all_card_details()
+            GLOBALS.list_tasks = self.trello_api_employees.get_all_card_details()
         except Exception as e:
             print(f"Error loading Trello data: {e}")
 
@@ -60,8 +60,9 @@ class Manger:
 
     def update_db(self):
        output_db =  self.db_manager.update_project_data(self.edited_transcript, self.meeting_id, self.meeting_datetime)
-       self.updated_topics = output_db.get('updated_topics')
-       self.updated_for_trello = output_db.get('updated_for_trello')
+       if output_db:
+            self.updated_topics = output_db.get('updated_topics')
+            self.updated_for_trello = output_db.get('updated_for_trello')
 
 
     def update_trello(self):
@@ -85,7 +86,7 @@ class Manger:
         if not os.path.exists(self.wav_path):
             print("Aborting: No wav_path found.")
             return
-        # self.process_transcription(self.wav_path)
+        self.process_transcription(self.wav_path)
         if not self.transcription_json_str:
             print("Aborting: No transcription json found.")
             return
@@ -116,9 +117,9 @@ class Manger:
         self.run()
 
 if __name__ == "__main__":
-    test = Manger("db/output/meeting_test.wav")
-    path = "db/output/transcription_test.json"
-    with open(path, "r", encoding="utf-8") as f:
-        test.transcription_json_str = json.dumps(json.load(f), ensure_ascii=False)
-    test.meeting_datetime = "2025-02-26 12:30"
+    test = Manger("db/meeting_test.wav")
+    # path = "db/output/transcription_test.json"
+    # with open(path, "r", encoding="utf-8") as f:
+    #     test.transcription_json_str = json.dumps(json.load(f), ensure_ascii=False)
+    test.meeting_datetime = "2025-03-26 00:00"
     test.run()

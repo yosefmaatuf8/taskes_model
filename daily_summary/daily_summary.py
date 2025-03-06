@@ -6,9 +6,10 @@ from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from openai import OpenAI
 from db_manager.db_manager import DBManager
-from globals import GLOBALS
 from .google_calendar_helper import GoogleCalendarHelper
 from utils.utils import split_text
+from globals import GLOBALS
+
 
 
 class DailySummary:
@@ -17,6 +18,7 @@ class DailySummary:
         load_dotenv()
         self.sender_email = sender_email
         self.sender_password = sender_password
+        print(self.sender_password)
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
         self.client = OpenAI(api_key=GLOBALS.openai_api_key)
@@ -129,7 +131,7 @@ if __name__ == "__main__":
         "Backend": [{"id": "T2", "field": "assigned_user", "new_value": "John"}]
     }
 
-    meeting_datetime = "2025-02-13 10:30"  # Format: YYYY-MM-DD HH:MM
+    meeting_datetime = "2025-03-05 10:00"  # Format: YYYY-MM-DD HH:MM
 
     summary_tool = DailySummary()
     summary_tool.process_and_notify(structured_data_example, updated_topics_example, meeting_datetime)
