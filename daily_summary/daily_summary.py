@@ -51,7 +51,7 @@ class DailySummary:
 
             for chunk in text_chunks:
                 response = self.client.chat.completions.create(
-                    model="gpt-4",
+                    model=self.openai_model_name,
                     messages=[{"role": "user", "content": prompt_template + f"\n\n**Chunk:**\n{chunk}"}],
                     max_tokens=self.max_tokens_response,
                     temperature=0.2
@@ -62,7 +62,7 @@ class DailySummary:
             return accumulated_summary.strip()
         else:
             response = self.client.chat.completions.create(
-                model="gpt-4",
+                model=self.openai_model_name,
                 messages=[{"role": "user", "content": prompt_template}],
                 max_tokens=self.max_tokens_response,
                 temperature=0.2

@@ -14,14 +14,14 @@ import json
 
 
 
-class Manger:
+class Manager:
     def __init__(self,wav_path = None,output_dir=GLOBALS.output_path, meeting_id = None):
         self.wav_path = wav_path
         self.output_dir = output_dir
         self.meeting_id = meeting_id or str(uuid.uuid4())[:5]
         self.meeting_datetime = None
         self.db_manager = DBManager()
-
+        print(GLOBALS.openai_model_name)
         self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
         self.transcription_json_str = None
 

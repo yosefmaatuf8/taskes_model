@@ -13,7 +13,8 @@ class DBManager:
     def __init__(self):
         self.updated_for_trello = None
         self.openai_model_name = GLOBALS.openai_model_name
-
+        self.max_tokens_response = 1000
+        self.max_tokens = GLOBALS.max_tokens - self.max_tokens_response
         self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
         self.updated_tasks_log = {}
         self.data_topics_and_tasks = None
@@ -216,7 +217,7 @@ class DBManager:
                 {"role": "system", "content": f"This is the list of users and their usernames: {self.users_data_str}"},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=20000,
+            max_tokens=self.max_tokens_response,
             temperature=0.1
         )
         return extract_json_from_code_block(response.choices[0].message.content)
@@ -298,7 +299,7 @@ class DBManager:
         response = self.client.chat.completions.create(
             model=self.openai_model_name,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=20000,
+            max_tokens=16000,
             temperature=0.2
         )
 

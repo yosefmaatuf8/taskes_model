@@ -11,7 +11,7 @@ class TranscriptionProcessing:
     def __init__(self):
         self.client = OpenAI(api_key=GLOBALS.openai_api_key)
         self.openai_model_name = GLOBALS.openai_model_name
-        self.max_tokens_response = 20000
+        self.max_tokens_response = 16000
         self.max_tokens = GLOBALS.max_tokens - self.max_tokens_response        
         self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
         self.db_manager = DBManager()

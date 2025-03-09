@@ -8,7 +8,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from globals import GLOBALS
-from src.main_manager import Manger  # Real-time transcription
+from src.main_manager import Manager  # Real-time transcription
 
 
 class StreamRecorder:
@@ -74,7 +74,7 @@ class StreamRecorder:
         self.output_dir = GLOBALS.output_path + f"/meeting_{self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')}"
         os.makedirs(self.output_dir, exist_ok=True)
         self.full_recording_path = os.path.join(self.output_dir, "full_meeting.wav")
-        self.meeting_analyzer = Manger(self.full_recording_path, self.output_dir)
+        self.meeting_analyzer = Manager(self.full_recording_path, self.output_dir)
 
     def check_audio_activity(self, audio_chunk):
         if not audio_chunk:
