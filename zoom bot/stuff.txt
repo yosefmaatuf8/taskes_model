@@ -1,0 +1,10 @@
+Secret Token = qYNvD6cgSlOSFEB8hdw5rQ
+Verification Token = hMW8c0zQRfio7EapSDXjjw
+
+new ai app stuff:
+Account ID = 4G8qjbI8SkWOlT5QOGPjeQ
+Client ID = dEFhV1lgRPiaxzak01Q5Q
+Client Secret = 5YbMmTG3TwDbWK2KWlOvTrgCoUjdhqmi
+
+secret token = FTWHoDrUQLmOokUhLRoIvg
+Verification Token = cTq3uJg3SG6UTL2QvVlgUw
