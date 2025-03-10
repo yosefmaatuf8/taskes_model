@@ -22,21 +22,22 @@ class Manager:
         self.meeting_datetime = None
         self.db_manager = DBManager()
         print(GLOBALS.openai_model_name)
-        self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
+       
+        # self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
         self.transcription_json_str = None
 
         self.post_transcription = TranscriptionProcessing()
         self.edited_transcript = None
         self.updated_topics = [{"updated_topics":'None_updated_topics'}]
         self.updated_for_trello = None
-
+        self.id_users_name_trello = None
         self.trello_list = None
         self.trello_api_employees = TrelloAPI(GLOBALS.bord_id_employees)
         try:
 
             GLOBALS.users_name_trello = self.trello_api_employees.get_usernames()
-            GLOBALS.id_users_name_trello = self.trello_api_employees.get_id_and_usernames()
-            GLOBALS.list_tasks = self.trello_api_employees.get_all_card_details()
+            GLOBALS.id_users_name_trello = self.id_users_name_trello or self.trello_api_employees.get_id_and_usernames()
+            GLOBALS.list_tasks = self.trello_list or self.trello_api_employees.get_all_card_details()
         except Exception as e:
             print(f"Error loading Trello data: {e}")
 
@@ -83,10 +84,10 @@ class Manager:
 
 
     def run(self):
-        if not os.path.exists(self.wav_path):
-            print("Aborting: No wav_path found.")
-            return
-        self.process_transcription(self.wav_path)
+        # if not os.path.exists(self.wav_path):
+        #     print("Aborting: No wav_path found.")
+        #     return
+        # self.process_transcription(self.wav_path)
         if not self.transcription_json_str:
             print("Aborting: No transcription json found.")
             return
@@ -117,9 +118,13 @@ class Manager:
         self.run()
 
 if __name__ == "__main__":
-    test = Manger("db/meeting_test.wav")
-    # path = "db/output/transcription_test.json"
-    # with open(path, "r", encoding="utf-8") as f:
-    #     test.transcription_json_str = json.dumps(json.load(f), ensure_ascii=False)
+    test = Manager("db/meeting_test.wav")
+    path = "db/tests/final_kickoff_meeting_transcription.json"
+    with open(path, "r", encoding="utf-8") as f:
+       test_data = json.load(f)
+    test.transcription_json_str = str(test_data.get("transcription",[]))
+    test.trello_list = str(test_data.get("trello_board"))
+    test.id_users_name_trello = str(test_data.get("names_trello"))
+
     test.meeting_datetime = "2025-03-26 00:00"
     test.run()

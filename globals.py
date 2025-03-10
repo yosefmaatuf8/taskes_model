@@ -5,7 +5,7 @@ from db.functions_dict import functions_dict
 
 class Globals:
     def __init__(self):
-        load_dotenv(find_dotenv())
+        load_dotenv(find_dotenv(),override=True)
         # Validate paths only for relevant variables
         self.sender_email = self.validate_env("SENDER_EMAIL")
         self.sender_password = self.validate_env("SENDER_PASSWORD")

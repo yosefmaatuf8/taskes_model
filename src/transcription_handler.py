@@ -26,7 +26,7 @@ class TranscriptionHandler:
         self.db_manager = DBManager()
         load_dotenv()
         self.openai_api_key = GLOBALS.openai_api_key
-        self.users_name_trello = GLOBALS.users_name_trello
+        self.users_name_trello = self.db_manager.read_users_data()[1]
         self.language = language
         self.wav_path = wav_path
         self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
@@ -73,6 +73,43 @@ class TranscriptionHandler:
             return chunks
         else:
             return [audio]
+
+    def load_and_clean_audio(self, chunk_duration=800, threshold=-10, margin=500):  # Add chunk_duration
+        """Loads, cleans audio in chunks, and returns a combined AudioSegment."""
+        try:
+            audio_segment = AudioSegment.from_file(f"{self.wav_path}.wav")
+            sr = audio_segment.frame_rate
+            total_duration = len(audio_segment)  # in milliseconds
+            cleaned_audio_chunks = []
+
+            for start in tqdm(range(0, total_duration, chunk_duration * 1000), desc="Remove silent audio chunks"):
+                end = min(start + chunk_duration * 1000, total_duration)
+                chunk = audio_segment[start:end]
+
+                samples = np.array(chunk.get_array_of_samples(), dtype=np.int16)
+                cleaned_samples = self.remove_silent_parts(samples, threshold, margin)
+
+                if cleaned_samples is not None:
+                    cleaned_chunk = AudioSegment(
+                        cleaned_samples.tobytes(),
+                        frame_rate=sr,
+                        sample_width=chunk.sample_width,
+                        channels=chunk.channels
+                    )
+                    cleaned_audio_chunks.append(cleaned_chunk)
+
+            # Concatenate the cleaned chunks back together
+            if cleaned_audio_chunks:
+                cleaned_audio_segment = cleaned_audio_chunks[0]
+                for chunk in cleaned_audio_chunks[1:]:
+                    cleaned_audio_segment += chunk
+                return cleaned_audio_segment
+            else:
+                return None
+
+        except Exception as e:
+            print(f"Error loading or cleaning audio: {e}")
+            return None
 
     def transcribe_audio_with_whisper(self, audio):
         buffer = BytesIO()
@@ -358,11 +395,11 @@ class TranscriptionHandler:
         """
         if wav_path:
             self.wav_path = wav_path
-
+    
         try:
-            audio = AudioSegment.from_file(self.wav_path, format="wav")
+            audio = self.load_and_clean_audio()
+            audio.export(f"{file}_clean.wav", format="wav")
             audio_chunks = self.split_audio_if_needed(audio)
-
         except Exception as e:
             print(f"Error loading audio file: {e}")
             traceback.print_exc()
@@ -432,10 +469,11 @@ class TranscriptionHandler:
                 segment['speaker'] = speaker_name  # Update with real speaker names
             df_users = self.db_manager.read_db("db_users_path")
             dict_username_name = dict(zip(df_users["name"], df_users["full_name_english"]))
-            self.transcription_for_ask_model = str([
+            transcription_json = [
                 {"speaker":dict_username_name.get(seg["speaker"],seg["speaker"]), "text": seg["text"]}
                 for seg in full_transcription_with_names
-            ])
+            ]
+            self.transcription_for_ask_model = str(transcription_json)
 
         except Exception as e:
             print(f"Error in inferring speaker names: {e}")
@@ -466,7 +504,7 @@ class TranscriptionHandler:
 
             # Save to JSON
             with open(self.output_path_json, "w", encoding="utf-8") as f:
-                json.dump(full_transcription_with_names, f, ensure_ascii=False, indent=4)
+                json.dump(transcription_json, f, ensure_ascii=False, indent=4)
 
 
 

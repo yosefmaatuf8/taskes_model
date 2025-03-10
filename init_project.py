@@ -33,6 +33,18 @@ class InitProject:
 
         print("Environment setup complete. Activate the virtual environment before running the project.")
 
+    def create_new_trello_board(self, board_name):
+        """ Create a new Trello board and handle errors gracefully. """
+        try:
+            new_board = self.trello_api.client.add_board(board_name)
+
+            print("new_board--",new_board.name,new_board.id)
+            GLOBALS.trello_nwe_bord_id = new_board.id
+            return new_board.id
+        except Exception as e:
+            print(f"Error creating Trello board: {e}")
+            return None
+
     def generate_db_rows(self):
         """ 
         Generate structured database rows using Trello data and GPT model.
@@ -172,7 +184,7 @@ class InitProject:
 
     def run(self):
         """ Initialize DB files and populate them with structured data """
-        board_id = GLOBALS.bord_id_manager or "67b5d782eb0035bdd4bb8595"
+        board_id = GLOBALS.bord_id_manager or self.create_new_trello_board("Manager Board")
         if board_id:
             env_file = find_dotenv()
             load_dotenv(env_file)
@@ -180,13 +192,13 @@ class InitProject:
             self.trello_api.board_id = board_id
         else:
             print("Failed to create Trello board. Exiting.")
-            return
-
+            
         rows_users = [{"id": "", "name": "", "hebrew_name": "", "full_name_english": "", "embedding": ""}]
         rows_tasks = [{"id": "", "topic": "", "name": "", "status": "", "assigned_user": ""}]
-        rows_topics = [{"topic": "", "topic_status": "", "tasks_id": ""}]
+        rows_topics = [{"topic": "", "category": "", "topic_status": "", "tasks_id": ""}] 
         rows_full_data = [{"id": "", "topic": "", "name": "", "status": "", "assigned_user": "", "summary": ""}]
-        rows_meetings = [{"meeting_id": "", "transcription": "", "topics": "","meeting_datetime":""}]
+        rows_meetings = [{"meeting_id": "", "transcription": "", "topics": "", "meeting_datetime": ""}]
+        rows_categories = [{"category": "Key Projects"}, {"category": "Development Environment"}, {"category": "Side & Secondary Tasks"},{"topics": ""}]
 
         trello_users, trello_rows_full_data, trello_data = self.generate_db_rows()
 
@@ -205,7 +217,9 @@ class InitProject:
             rows_tasks=rows_tasks,
             rows_topics=rows_topics,
             rows_full_data=rows_full_data,
-            rows_meetings=rows_meetings
+            rows_meetings=rows_meetings,
+            rows_categories=rows_categories
         )
+        
 
         print("Database initialized with structured data.")

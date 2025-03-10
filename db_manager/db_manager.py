@@ -22,6 +22,7 @@ class DBManager:
         self.trello_tasks = GLOBALS.list_tasks
         self.trello_data = None
         self.db_path = GLOBALS.db_path
+        self.db_categories = self.db_path + '/categories.csv'
         self.db_users_path = self.db_path + '/users.csv'
         self.db_tasks_path = self.db_path + '/tasks.csv'
         self.db_topics_status_path = self.db_path + '/topics_status.csv'
@@ -32,7 +33,7 @@ class DBManager:
         if os.path.exists(self.db_full_data_path):
             self.users_data_str = self.read_users_data()[1]
 
-    def create_db(self, rows_users, rows_tasks, rows_topics, rows_full_data, rows_meetings):
+    def create_db(self, rows_users, rows_tasks, rows_topics, rows_full_data, rows_meetings,rows_categories):
         if not os.path.exists(self.db_path):
             os.mkdir(self.db_path)
 
@@ -41,6 +42,7 @@ class DBManager:
         pd.DataFrame(rows_topics).to_csv(self.db_topics_status_path, index=False)
         pd.DataFrame(rows_full_data).to_csv(self.db_full_data_path, index=False)
         pd.DataFrame(rows_meetings).to_csv(self.db_meetings_transcriptions_path, index=False)
+        pd.DataFrame(rows_categories).to_csv(self.db_categories, index=False)
 
     def update_db(self, type_db, data, id_column):
         """
@@ -53,7 +55,7 @@ class DBManager:
         if os.path.exists(file_path):
             df = pd.read_csv(file_path)
         else:
-            df = pd.DataFrame(columns=[id_column, "topic", "name", "status", "assigned_user", "summary"])
+            df = pd.DataFrame(columns=data.keys())
 
         existing_ids = set(df[id_column].dropna().astype(str))  # ✅ Get existing IDs as a set
 
@@ -80,10 +82,13 @@ class DBManager:
         return pd.read_csv(file_path)
 
     def read_users_data(self):
+        if not os.path.exists(self.db_users_path):
+            return {}, "None"
         df = pd.read_csv(self.db_users_path)
         users_data = {}
         for _, row in df.iterrows():
-            id_user, user_name, hebrew_name, full_name_english = row.get("id"), row.get("name"), row.get("hebrew_name"), row.get("full_name_english")
+            id_user, user_name, hebrew_name, full_name_english = row.get("id"), row.get("name"), row.get(
+                "hebrew_name"), row.get("full_name_english")
             users_data[full_name_english] = (id_user, user_name, hebrew_name)
         return users_data, str(users_data)
 
@@ -146,66 +151,107 @@ class DBManager:
             df.loc[df['name'] == user_id, 'embedding'] = json.dumps(emb.tolist())
         df.to_csv(self.db_users_path, index=False)
 
-    def extract_topics_from_transcription(self, transcription_text):
+    def extract_topics_from_transcription(self, summarized_transcription):
         """
-        Sends the transcription to the model and extracts structured topics, tasks, statuses,
-        and a summarized transcription for each task.
+        Processes the summarized transcription and categorizes topics into predefined development areas.
+        Ensures tasks are grouped under existing project areas and allows multiple assigned users.
         """
+
         prompt = f'''
-        You are an AI assistant specializing in meeting analysis.
-        You are **fully capable of processing Hebrew**.
-        Do **not** translate the text. Extract the data as-is.
+        You are an AI assistant specializing in **structuring summarized meeting transcriptions**.
+        The input you receive is **already processed, summarized, and in English**.
 
-        Your task is to extract structured project-related information from the following meeting transcription.
-        Identify the relevant project topics, associated tasks, assigned users, current statuses, 
-        and provide a **concise summary** of what was said about each task.
-        ---
-
-        **❗ Guidelines:**
-        1. **Only extract significant project-related topics and tasks.**  
-           - **A task must require action, tracking, and clear responsibility.**  
-           - **Ignore** casual statements or vague suggestions.
-        2. **A task must include a clear action, assigned user, and expected status.**
-           - Valid: "Prepare the API documentation by Thursday."  
-           - Invalid: "We should discuss the API."
-        3. **Tasks must be grouped under relevant topics** (use only the existing topics unless a new topic is clearly required).  
-        4. **Assigned users should only be selected from the provided list of users and usernames.
-           - If a person's name appears in the transcription, try to match it with the most appropriate username from the provided list.
-           - If the exact name is not found, select the closest match based on context.
-           - If no clear user is mentioned, or if the name cannot be confidently matched, set "assigned_user": "unknown".
-        5. **Every task must have an assigned user and a status.**
-           - If the status is not explicitly mentioned, infer it logically based on the conversation.
-           - If no user is mentioned, assign `"assigned_user": "unknown"`.
+        Your task is to:
+        1. **Categorize discussions into predefined development areas** (Key Projects, Development Environment, Side Tasks).
+        2. **Assign each task to an appropriate topic within the selected category**.
+        3. **Ensure each task has a clear name, status, and list of assigned users**.
+        4. **Use only the existing categories—do not create new ones.**
 
         ---
-        **Meeting Transcription (in Hebrew, do not translate):**
-        {transcription_text}
+        **Development Categories (choose only from these):**
+        ```
+        - Key Projects
+        - Development Environment
+        - Side & Secondary Tasks
+        ```
 
         ---
         **Existing Topics (for reference):**
         {self.existing_topics}
 
         ---
-        **Expected JSON Output Format:**
+        **Summarized Meeting Discussion:**
+        ```
+        {summarized_transcription}
+        ```
+
+        ---
+        **Example Output Format:**
         ```json
         {{
-          "topics": [
+          "development_areas": [
             {{
-              "name": "Topic Name (must be written in English only)",
-              "tasks": [
+              "category": "Key Projects",
+              "topics": [
                 {{
-                  "id": "Task ID",
-                  "name": "Task Name (must be written in English only)",
-                  "status": "Task Status (To Do, In Progress, Completed)",
-                  "assigned_user": "Assigned User (must be from the provided list or 'unknown')",
-                  "previous_status": "Previous Task Status (if applicable)",
-                  "summary": "Concise summary of what was said about this task during the meeting (must be written in English only)"
+                  "name": "User Management System",
+                  "tasks": [
+                    {{
+                      "id": "T101",
+                      "name": "Improve user authentication security",
+                      "status": "In Progress",
+                      "assigned_users": ["john_doe", "alice_smith"],
+                      "summary": "Discussion on improving OAuth security and role-based permissions."
+                    }},
+                    {{
+                      "id": "T102",
+                      "name": "Redesign account recovery flow",
+                      "status": "To Do",
+                      "assigned_users": ["alice_smith"],
+                      "summary": "The team suggested redesigning password recovery to reduce support tickets."
+                    }}
+                  ]
+                }}
+              ]
+            }},
+            {{
+              "category": "Development Environment",
+              "topics": [
+                {{
+                  "name": "CI/CD Pipeline",
+                  "tasks": [
+                    {{
+                      "id": "T103",
+                      "name": "Migrate CI/CD to GitHub Actions",
+                      "status": "Completed",
+                      "assigned_users": ["tomer_s"],
+                      "summary": "Jenkins replaced with GitHub Actions for faster deployments."
+                    }}
+                  ]
+                }}
+              ]
+            }},
+            {{
+              "category": "Side & Secondary Tasks",
+              "topics": [
+                {{
+                  "name": "Internal Documentation",
+                  "tasks": [
+                    {{
+                      "id": "T104",
+                      "name": "Update API documentation",
+                      "status": "In Progress",
+                      "assigned_users": ["eden_q", "john_doe"],
+                      "summary": "Developers mentioned that API docs are outdated and need revision."
+                    }}
+                  ]
                 }}
               ]
             }}
           ]
         }}
         ```
+
         **Return ONLY valid JSON format. No explanations, introductions, or additional text.**
         '''
 
@@ -213,13 +259,14 @@ class DBManager:
             model=self.openai_model_name,
             messages=[
                 {"role": "system",
-                 "content": "You are a structured data extraction assistant capable of processing Hebrew."},
+                 "content": "You structure summarized meeting transcriptions into a predefined JSON format."},
                 {"role": "system", "content": f"This is the list of users and their usernames: {self.users_data_str}"},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=self.max_tokens_response,
             temperature=0.1
         )
+
         return extract_json_from_code_block(response.choices[0].message.content)
 
     def generate_updates_from_model(self, topic_name, new_data, type_db, trello_tasks="not_relevant"):
@@ -321,11 +368,11 @@ class DBManager:
         df_for_update = self.generate_updates_from_model(topic_name, data_topic_and_tasks, "db_full_data_path",
                                                          self.trello_tasks)
 
-
         existing_ids = set(df_existing["id"].dropna().astype(str))  # ✅ Get existing IDs
         updated_tasks_log = []
 
         for update in df_for_update:
+            print("update", update)
             task_id = update.get("id", "").strip()
 
             # ✅ Generate a unique ID if the task doesn't exist
@@ -351,14 +398,17 @@ class DBManager:
 
                 if str(new_value) != str(old_value):  # ✅ Update only if there's a real change
                     if task_id in df_existing["id"].values:
+                        if isinstance(new_value, list):
+                            new_value = json.dumps(new_value)  # Convert lists to JSON strings
                         df_existing.loc[df_existing["id"] == task_id, field] = new_value
+
                     else:
                         new_task_entry = {
                             "id": task_id,
                             "topic": topic_name,
                             "name": update.get("name", ""),
                             "status": update.get("status", ""),
-                            "assigned_user": update.get("assigned_user", ""),
+                            "assigned_user": update.get("assigned_user", []),
                             "summary": update.get("summary", "")
                         }
                         df_existing = pd.concat([df_existing, pd.DataFrame([new_task_entry])], ignore_index=True)
@@ -457,44 +507,62 @@ class DBManager:
         Merges topic data from different chunks.
         - If a topic appears multiple times, its tasks will be merged with existing tasks.
         - If a task appears multiple times, its status will be updated accordingly.
+        - Ensures topics are assigned to their correct category.
 
         :param existing_data: The existing topic data.
         :param new_data: The new data extracted from the current chunk.
-        :return: A unified structure containing merged topics and tasks.
+        :return: A unified structure containing merged topics and tasks categorized correctly.
         """
-        topic_dict = {topic["name"]: topic for topic in existing_data.get("topics", [])}
+        category_dict = {category["category"]: category for category in existing_data.get("development_areas", [])}
+
         if not isinstance(new_data, dict):
-            print("new_data is not dict", new_data)
-            return []
-        for topic in new_data.get("topics", []):
-            topic_name = topic["name"]
+            print("new_data is not a valid dictionary:", new_data)
+            return {"development_areas": []}
 
-            if topic_name in topic_dict:
-                # If the topic already exists, add new tasks or update existing ones.
-                existing_tasks = {task["id"]: task for task in topic_dict[topic_name]["tasks"]}
+        for category_data in new_data.get("development_areas", []):
+            category_name = category_data["category"]
 
-                for task in topic["tasks"]:
-                    task_id = task["id"]
-                    if task_id in existing_tasks:
-                        # If the task already exists, update it only if the status has changed.
-                        if task["status"] != existing_tasks[task_id]["status"]:
-                            existing_tasks[task_id]["status"] = task["status"]
-                        if task.get("assigned_user") and task["assigned_user"] != existing_tasks[task_id][
-                            "assigned_user"]:
-                            existing_tasks[task_id]["assigned_user"] += task["assigned_user"]
-                        if task.get("summary") and existing_tasks[task_id].get("summary"):
-                            existing_tasks[task_id]["summary"] += task["summary"]
-                    else:
-                        # If this is a new task, add it.
-                        existing_tasks[task_id] = task
+            if category_name not in category_dict:
+                category_dict[category_name] = {"category": category_name, "topics": []}
 
-                # Update the task list for the topic.
-                topic_dict[topic_name]["tasks"] = list(existing_tasks.values())
-            else:
-                # If the topic is entirely new, add it.
-                topic_dict[topic_name] = topic
+            existing_topics = {topic["name"]: topic for topic in category_dict[category_name]["topics"]}
 
-        return {"topics": list(topic_dict.values())}
+            for topic in category_data["topics"]:
+                topic_name = topic["name"]
+
+                if topic_name in existing_topics:
+                    # If the topic already exists, merge tasks
+                    existing_tasks = {task["id"]: task for task in existing_topics[topic_name]["tasks"]}
+
+                    for task in topic["tasks"]:
+                        task_id = task["id"]
+                        if task_id in existing_tasks:
+                            # Update status if changed
+                            if task["status"] != existing_tasks[task_id]["status"]:
+                                existing_tasks[task_id]["status"] = task["status"]
+
+                            # Merge assigned users
+                            existing_users = set(existing_tasks[task_id].get("assigned_users", []))
+                            new_users = set(task.get("assigned_users", []))
+                            existing_tasks[task_id]["assigned_users"] = list(existing_users.union(new_users))
+
+                            # Append to summary if new details exist
+                            if task.get("summary"):
+                                existing_tasks[task_id]["summary"] += " " + task["summary"]
+                        else:
+                            # Add new task
+                            existing_tasks[task_id] = task
+
+                    # Update topic tasks
+                    existing_topics[topic_name]["tasks"] = list(existing_tasks.values())
+                else:
+                    # Add new topic to category
+                    existing_topics[topic_name] = topic
+
+            # Update category topics
+            category_dict[category_name]["topics"] = list(existing_topics.values())
+
+        return {"development_areas": list(category_dict.values())}
 
     def get_updated_tasks(self):
         """
@@ -519,7 +587,8 @@ class DBManager:
                     # Create new entry with only the updated fields
                     updated_tasks[task_id] = {
                         "id": task_id,
-                        "topic": topic_name
+                        "topic": topic_name,
+                    "assigned_users": new_update.get("assigned_users", [])
                     }
                     updated_tasks[task_id].update(new_update)  # Add only new values
 
@@ -540,7 +609,8 @@ class DBManager:
                 status_update = {
                     "topic": topic_name,
                     "topic_status": row.get("topic_status", ""),
-                    "tasks_id": row.get("tasks_id", "")
+                    "tasks_id": row.get("tasks_id", ""),
+                    "category": row.get("category", "")
                 }
                 updated_statuses.append(status_update)
 
@@ -564,21 +634,25 @@ class DBManager:
     def update_project_data(self, processed_transcription, meeting_id, meeting_datetime):
         """
         Updates project data by merging repeated topics from different chunks.
+        Ensures each topic is assigned to a correct category and tracks category-topic mapping.
         """
         if not self.users_data_str:
-            self.users_data_str = self.users_data_str = self.read_users_data()[1]
+            self.users_data_str = self.read_users_data()[1]
 
-        # 1) Read existing topics.
+        # 1) Read existing topics & categories
         df_topics = self.read_db("db_topics_status_path")
-        self.existing_topics = df_topics["topic"].unique().tolist() if not df_topics.empty else []
+        df_categories = self.read_db("db_categories")
 
-        # 2) Convert transcription to JSON.
-        refined_list = processed_transcription.get("refined_transcription", [])
-        transcription_str = json.dumps({"refined_transcription": refined_list})
+        existing_categories = df_categories["category"].tolist() if not df_categories.empty else []
+        self.existing_topics = df_topics["topic"].tolist() if not df_topics.empty else []
 
-        # 3) Split into chunks if needed.
+        # 2) Convert transcription to JSON
+        refined_list = processed_transcription.get("summarized_transcription", [])
+        transcription_str = json.dumps({"summarized_transcription": refined_list})
+
+        # 3) Split into chunks if needed
         max_length = 2000
-        combined_data = {"topics": []}
+        combined_data = {"development_areas": []}
 
         if len(transcription_str) > max_length:
             text_chunks = split_text(self.tokenizer, transcription_str, max_length)
@@ -588,39 +662,57 @@ class DBManager:
         else:
             combined_data = self.extract_topics_from_transcription(transcription_str)
 
-        self.data_topics_and_tasks = combined_data  # Store merged topic data.
+        self.data_topics_and_tasks = combined_data  # Store merged topic data
 
-        if not self.data_topics_and_tasks or "topics" not in self.data_topics_and_tasks:
+        if not self.data_topics_and_tasks or "development_areas" not in self.data_topics_and_tasks:
             print("No topics found; nothing to update.")
             return
 
-        # 4) Process each topic separately.
-        for topic_info in self.data_topics_and_tasks["topics"]:
-            topic_name = topic_info["name"]
-            tasks = topic_info["tasks"]
+        # 4) Process each category and its topics
+        new_topics = []
+        for category_info in self.data_topics_and_tasks["development_areas"]:
+            category_name = category_info["category"]
+            if category_name not in existing_categories:
+                print(f"❌ Warning: Category '{category_name}' does not exist in the system.")
 
-            self.update_full_data(tasks, topic_name)
-            self.update_status(topic_name)
+            for topic_info in category_info["topics"]:
+                topic_name = topic_info["name"]
+                tasks = topic_info["tasks"]
 
-        # 5) Synchronize with Trello.
-        self.updated_for_trello = self.get_trello_updates()
+                # Assign topic to a category
+                new_topics.append({
+                    "topic": topic_name,
+                    "category": category_name,
+                    "topic_status": "In Progress",  # Default status
+                    "tasks_id": ",".join([task["id"] for task in tasks])  # Store task IDs as a comma-separated string
+                })
+
+                # Update full_data and statuses
+                self.update_full_data(tasks, topic_name)
+                self.update_status(topic_name)
+
+        # 5) Update the topics_status.csv to include category mapping
+        self.update_db("db_topics_status_path", new_topics, "topic")
 
         # 6) Save meeting transcription data
-        topics = [topic["name"] for topic in self.data_topics_and_tasks.get("topics", [])]
+        topics = [topic["name"] for category in self.data_topics_and_tasks["development_areas"] for topic in
+                  category["topics"]]
         transcription_json = json.dumps(processed_transcription, ensure_ascii=False)  # Convert to JSON string
 
         rows_meetings = [
             {
                 "meeting_id": meeting_id,
                 "transcription": transcription_json,  # Store transcription as JSON string
-                "topics": json.dumps(topics, ensure_ascii=False), # Store topics as JSON string
+                "topics": json.dumps(topics, ensure_ascii=False),  # Store topics as JSON string
                 "meeting_datetime": meeting_datetime
             }
         ]
 
         # Ensure `meeting_id` is correctly used as the ID column
         self.update_db("db_meetings_transcriptions_path", rows_meetings, "meeting_id")
-        output =  {
+        self.updated_for_trello = self.get_trello_updates()
+
+        output = {
             "data_topics_and_tasks": self.data_topics_and_tasks,
             "updated_topics": self.updated_tasks_log,
             "updated_for_trello": self.updated_for_trello
