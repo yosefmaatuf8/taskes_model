@@ -677,7 +677,7 @@ class DBManager:
             category_name = category_info["category"]
             if category_name not in existing_categories:
                 print(f"❌ Warning: Category '{category_name}' does not exist in the system.")
-            rows_categories = [{"category": category_name,"topics": topic["name"] for topic in category_info["topics"]}]
+            rows_categories = [{"category": category_name,"topics": [topic["name"] for topic in category_info["topics"]]}]
             self.update_db("db_categories", rows_categories , "category")
             for topic_info in category_info["topics"]:
                 topic_name = topic_info["name"]
