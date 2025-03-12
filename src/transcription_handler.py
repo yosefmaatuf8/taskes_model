@@ -7,7 +7,9 @@ from io import BytesIO
 from pyannote.audio import Audio
 import traceback
 import copy
-from utils.utils import split_text
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.utils import split_text, load_and_clean_audio
 from dotenv import load_dotenv
 import tiktoken
 from globals import GLOBALS
@@ -225,7 +227,7 @@ class TranscriptionHandler:
         Processes a short audio segment with a 10-second overlap for context.
         """
         try:
-            audio = AudioSegment.from_file(self.wav_path, format="wav")
+            audio = load_and_clean_audio(self.wav_path, format="wav")
 
             # Ensure the start time includes 10 seconds of overlap (but not below 0)
             start_ms = max(0, (start_time - self.least_chunk) * 1000)
@@ -360,7 +362,7 @@ class TranscriptionHandler:
             self.wav_path = wav_path
 
         try:
-            audio = AudioSegment.from_file(self.wav_path, format="wav")
+            audio = load_and_clean_audio(self.wav_path, format="wav")
             audio_chunks = self.split_audio_if_needed(audio)
 
         except Exception as e:
@@ -490,7 +492,7 @@ class TranscriptionHandler:
 
 
 if __name__ == "__main__":
-    file = "/db/meet_25_12_24_first.wav"
+    file = "../meeting/meet_25_12_24_first.wav"
     # Convert MP4 to WAV
     # audio = AudioSegment.from_file(f"{file}.mp4", format="mp4")
     # audio.export(f"{file}.wav", format="wav")
