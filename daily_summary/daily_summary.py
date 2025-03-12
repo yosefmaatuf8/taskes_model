@@ -1,6 +1,7 @@
 import smtplib
 import json
 import tiktoken
+import pandas as pd
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
@@ -28,23 +29,63 @@ class DailySummary:
         self.from_email = self.sender_email
         self.db_manager = DBManager()
 
+
     def summarize_in_chunks(self, content: str, summary_type: str = "manager", previous_summary: str = "") -> str:
-        """Summarizes large content in chunks while maintaining coherence."""
+        """
+        Summarizes large content in chunks while maintaining coherence.
+
+        :param content: The meeting content to summarize.
+        :param summary_type: The type of summary ("manager" or "employees").
+        :param previous_summary: Accumulated summary from previous chunks (if any).
+        :return: The structured summary.
+        """
+
+        # Load user data from CSV to map usernames to full names
+        df_users = self.db_manager.read_db("db_users_path")
+        username_to_fullname = {row["name"]: row["full_name_english"] for _, row in df_users.iterrows() if pd.notna(row["full_name_english"])}
+
+        # Load topic-specific summary instructions from topics.csv
+        df_topics = self.db_manager.read_db("db_topics_status_path")
+        topic_instructions = {row["topic"]: row["prompt_for_summary"] for _, row in df_topics.iterrows() if pd.notna(row["prompt_for_summary"])}
+
+        # Format user mapping as a string for the prompt
+        users_info = "\n".join([f"{username}: {full_name}" for username, full_name in username_to_fullname.items()])
+
+        # Define general instructions based on summary type
         instructions = {
-            "manager": "Provide a structured summary for a Project Manager.",
-            "employees": "Provide a structured summary for Employees."
+            "manager": "Provide a short and concise summary that contains an overview of all updates for topics, categories, and major tasks discussed in the meeting, with a focus on their impact on project progress and decision-making.",
+            "employees": "Provide a concise summary that contains an overview of all updates for topics, categories, and tasks discussed in the meeting, emphasizing the key tasks assigned to each developer, their responsibilities, and any relevant dependencies."
+
         }
 
+        #  If manager instructions per topic are available, format them
+        if summary_type == "manager" and topic_instructions:
+            formatted_topic_instructions = "\n".join([f"**{topic}:** {instr}" for topic, instr in topic_instructions.items()])
+            custom_topic_guidelines = f"\n\n**Custom Manager Instructions per Topic:**\n{formatted_topic_instructions}\n"
+        else:
+            custom_topic_guidelines = ""
+
+        #  Create the base prompt with user mapping and general instructions
         prompt_template = f"""
         You are an AI meeting assistant. Generate a {summary_type} summary.
 
         **Instructions:** {instructions[summary_type]}
+        
+        **Important Note:**
+        The following mapping contains usernames and their corresponding full names.
+        In your response, **replace every username with the corresponding full name**.
+
+        **User Mapping:**
+        {users_info}
+
+        {custom_topic_guidelines}
 
         ---
         **Previous Summary:** {previous_summary}
         **Meeting Content:** {content}
         """
 
+        # If the content is too long, split it into chunks and summarize iteratively
         if len(content) > self.max_tokens:
             text_chunks = split_text(self.tokenizer, content, self.max_tokens - 500)
             accumulated_summary = previous_summary
@@ -60,6 +101,7 @@ class DailySummary:
                 accumulated_summary += "\n" + chunk_summary  # Append new chunk summary
 
             return accumulated_summary.strip()
+
         else:
             response = self.client.chat.completions.create(
                 model=self.openai_model_name,

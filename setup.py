@@ -29,7 +29,9 @@ setup(
         "py-trello>=0.19.0",
         "pyyaml>=6.0",
         "setuptools>=58.0.0",
-        "google-api-python-client>=2.0.0"
+        "google-api-python-client>=2.0.0",
+        "librosa>=0.9.0"
+
     ],
     python_requires=">=3.8",
     entry_points={

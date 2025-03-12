@@ -1,12 +1,14 @@
 import os
 import datetime
 import json
+import numpy as np
 import requests
 from pydub import AudioSegment
 from io import BytesIO
 from pyannote.audio import Audio
 import traceback
 import copy
+import librosa
 from utils.utils import split_text
 from dotenv import load_dotenv
 import tiktoken
@@ -74,10 +76,42 @@ class TranscriptionHandler:
         else:
             return [audio]
 
+
+    def remove_silent_parts(self, audio_data, threshold, margin): # Takes audio data and sample rate
+        """Removes silent parts from audio data (NumPy array)."""
+        try:
+            frame_length = 512
+            hop_length = frame_length // 4
+            rms = librosa.feature.rms(y=audio_data, frame_length=frame_length, hop_length=hop_length)[0]
+            db = librosa.amplitude_to_db(rms + 1e-10)
+            silent_frames = np.where(db < np.mean(db) + threshold)[0]
+            silent_frames_expanded = []
+            for frame in silent_frames:
+                silent_frames_expanded.extend(range(max(0, frame - margin // hop_length), min(len(db), frame + margin // hop_length)))
+            silent_frames_expanded = sorted(list(set(silent_frames_expanded)))
+
+            mask = np.ones_like(db, dtype=bool)
+            mask[silent_frames_expanded] = False
+
+            non_silent_indices = []
+            for i in range(len(mask)):
+                if mask[i]:
+                    start = i * hop_length
+                    end = min((i + 1) * hop_length, len(audio_data))
+                    non_silent_indices.extend(range(start, end))
+            cleaned_audio = audio_data[np.array(non_silent_indices)]
+
+            return cleaned_audio
+
+        except Exception as e:
+            print(f"Error processing audio: {e}")
+            return None
+
+
     def load_and_clean_audio(self, chunk_duration=800, threshold=-10, margin=500):  # Add chunk_duration
         """Loads, cleans audio in chunks, and returns a combined AudioSegment."""
         try:
-            audio_segment = AudioSegment.from_file(f"{self.wav_path}.wav")
+            audio_segment = AudioSegment.from_file(self.wav_path)
             sr = audio_segment.frame_rate
             total_duration = len(audio_segment)  # in milliseconds
             cleaned_audio_chunks = []
@@ -227,7 +261,6 @@ class TranscriptionHandler:
         if "choices" not in response_json or not response_json["choices"]:
             print(f"Unexpected OpenAI response: {response_json}")
             return ""
-        print("response:  \n", response_json["choices"][0]["message"]["content"])
         return response_json["choices"][0]["message"]["content"]
 
 
@@ -389,6 +422,7 @@ class TranscriptionHandler:
 
         return self.transcription_for_ask_model
 
+
     def run_all_file(self, wav_path=None, output_dir=GLOBALS.output_path):
         """
         Process the entire audio file in chunks while maintaining logic consistency with `run()`.
@@ -398,7 +432,7 @@ class TranscriptionHandler:
     
         try:
             audio = self.load_and_clean_audio()
-            audio.export(f"{file}_clean.wav", format="wav")
+            audio.export(f"{self.wav_path}_clean.wav", format="wav")
             audio_chunks = self.split_audio_if_needed(audio)
         except Exception as e:
             print(f"Error loading audio file: {e}")

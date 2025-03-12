@@ -51,30 +51,32 @@ class DBManager:
         """
         file_path = getattr(self, type_db)
 
-        # ✅ Load existing database if available, otherwise create an empty DataFrame
+        # Load existing database if available, otherwise create an empty DataFrame
         if os.path.exists(file_path):
             df = pd.read_csv(file_path)
         else:
             df = pd.DataFrame(columns=data.keys())
 
-        existing_ids = set(df[id_column].dropna().astype(str))  # ✅ Get existing IDs as a set
+        existing_ids = set(df[id_column].dropna().astype(str))  #  Get existing IDs as a set
 
         for entry in data:
             entry_id = entry.get(id_column)
 
-            # ✅ If the ID exists, update the existing record
+            # If the ID exists, update the existing record
             if entry_id in existing_ids:
                 idx = df[df[id_column] == entry_id].index[0]
 
                 for key, value in entry.items():
                     if key in df.columns and pd.notna(value):
                         df.at[idx, key] = value
+                    else:
+                        print(f"Invalid column or missing value: {key} - {value}")
 
-            # ✅ If the ID is missing or new, add a new record
+            # If the ID is missing or new, add a new record
             else:
                 df = pd.concat([df, pd.DataFrame([entry])], ignore_index=True)
 
-        # ✅ Save the updated DataFrame back to CSV
+        #  Save the updated DataFrame back to CSV
         df.to_csv(file_path, index=False)
 
     def read_db(self, type_db):
@@ -148,7 +150,7 @@ class DBManager:
 
         df['embedding'] = df['embedding'].astype(str)
         for user_id, emb in embeddings.items():
-            df.loc[df['name'] == user_id, 'embedding'] = json.dumps(emb.tolist())
+            df.loc[df['full_name_english'] == user_id, 'embedding'] = json.dumps(emb.tolist())
         df.to_csv(self.db_users_path, index=False)
 
     def extract_topics_from_transcription(self, summarized_transcription):
@@ -470,7 +472,7 @@ class DBManager:
         # ✅ Save the updated DataFrame back to CSV
         df_tasks.to_csv(self.db_tasks_path, index=False)
 
-    def update_status(self, topic_name):
+    def update_status(self, category_name, topic_name):
         """
         Updates the db_topics_status database for a specific topic.
         Ensures that all task IDs related to the topic are correctly stored.
@@ -495,7 +497,8 @@ class DBManager:
             status_update = [{
                 "topic": topic_name,
                 "topic_status": topic_status,
-                "tasks_id": ",".join(task_ids)  # Store task IDs as a comma-separated string
+                "tasks_id": ",".join(task_ids),  # Store task IDs as a comma-separated string
+                "category": category_name
             }]
 
             # ✅ Update the database
@@ -631,7 +634,7 @@ class DBManager:
 
         return trello_updates
 
-    def update_project_data(self, processed_transcription, meeting_id, meeting_datetime):
+    def update_project_data(self,full_transcription, processed_transcription, meeting_id, meeting_datetime):
         """
         Updates project data by merging repeated topics from different chunks.
         Ensures each topic is assigned to a correct category and tracks category-topic mapping.
@@ -674,25 +677,19 @@ class DBManager:
             category_name = category_info["category"]
             if category_name not in existing_categories:
                 print(f"❌ Warning: Category '{category_name}' does not exist in the system.")
-
+            rows_categories = [{"category": category_name,"topics": topic["name"] for topic in category_info["topics"]}]
+            self.update_db("db_categories", rows_categories , "category")
             for topic_info in category_info["topics"]:
                 topic_name = topic_info["name"]
                 tasks = topic_info["tasks"]
 
-                # Assign topic to a category
-                new_topics.append({
-                    "topic": topic_name,
-                    "category": category_name,
-                    "topic_status": "In Progress",  # Default status
-                    "tasks_id": ",".join([task["id"] for task in tasks])  # Store task IDs as a comma-separated string
-                })
-
+             
                 # Update full_data and statuses
                 self.update_full_data(tasks, topic_name)
-                self.update_status(topic_name)
+                self.update_status(category_name, topic_name)
 
-        # 5) Update the topics_status.csv to include category mapping
-        self.update_db("db_topics_status_path", new_topics, "topic")
+        # # 5) Update the topics_status.csv to include category mapping
+        # self.update_db("db_topics_status_path", new_topics, "topic")
 
         # 6) Save meeting transcription data
         topics = [topic["name"] for category in self.data_topics_and_tasks["development_areas"] for topic in
@@ -702,6 +699,7 @@ class DBManager:
         rows_meetings = [
             {
                 "meeting_id": meeting_id,
+                "full_transcription":full_transcription,
                 "transcription": transcription_json,  # Store transcription as JSON string
                 "topics": json.dumps(topics, ensure_ascii=False),  # Store topics as JSON string
                 "meeting_datetime": meeting_datetime

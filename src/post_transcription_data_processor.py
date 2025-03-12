@@ -80,7 +80,6 @@ class TranscriptionProcessing:
                     max_tokens=self.max_tokens_response,
                     temperature=0.2
                 )
-                print("✅ Response received.",response.choices[0].message.content)
                 refined_data = extract_json_from_code_block(response.choices[0].message.content)
 
                 if refined_data:

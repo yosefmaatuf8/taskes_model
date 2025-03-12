@@ -195,9 +195,9 @@ class InitProject:
             
         rows_users = [{"id": "", "name": "", "hebrew_name": "", "full_name_english": "", "embedding": ""}]
         rows_tasks = [{"id": "", "topic": "", "name": "", "status": "", "assigned_user": ""}]
-        rows_topics = [{"topic": "", "category": "", "topic_status": "", "tasks_id": ""}] 
+        rows_topics = [{"topic": "", "category": "", "topic_status": "", "tasks_id": "", "prompt_for_summary": ""}] 
         rows_full_data = [{"id": "", "topic": "", "name": "", "status": "", "assigned_user": "", "summary": ""}]
-        rows_meetings = [{"meeting_id": "", "transcription": "", "topics": "", "meeting_datetime": ""}]
+        rows_meetings = [{"meeting_id": "","full_transcription":"", "transcription": "", "topics": "", "meeting_datetime": ""}]
         rows_categories = [{"category": "Key Projects"}, {"category": "Development Environment"}, {"category": "Side & Secondary Tasks"},{"topics": ""}]
 
         trello_users, trello_rows_full_data, trello_data = self.generate_db_rows()
