@@ -117,7 +117,7 @@ class Manager:
         self.run()
 
 if __name__ == "__main__":
-    test = Manger("db/meeting_test.wav")
+    test = Manager("/home/mefathim/downloaded_meetings/full_meeting.wav")
     # path = "db/output/transcription_test.json"
     # with open(path, "r", encoding="utf-8") as f:
     #     test.transcription_json_str = json.dumps(json.load(f), ensure_ascii=False)
