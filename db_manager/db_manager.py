@@ -22,7 +22,7 @@ class DBManager:
         self.trello_tasks = GLOBALS.list_tasks
         self.trello_data = None
         self.db_path = GLOBALS.db_path
-        self.db_users_path = self.db_path + '/users_.csv'
+        self.db_users_path = self.db_path + '/users.csv'
         self.db_tasks_path = self.db_path + '/tasks.csv'
         self.db_topics_status_path = self.db_path + '/topics_status.csv'
         self.db_full_data_path = self.db_path + '/full_data.csv'
@@ -138,17 +138,20 @@ class DBManager:
             history_str = row.get("history", "[]")  # Default to empty list if missing
 
             if not name or not embedding_str or embedding_str.lower() in ["", "nan", "none"]:
+                print(f"Skipping invalid row: {name}")
                 continue  # Skip invalid rows
 
             try:
                 embedding_list = json.loads(embedding_str)  # Convert JSON string to list
-                history_list = json.loads(history_str)  # Convert JSON string to list
+
+                history_list = json.loads(str(history_str))  # Convert JSON string to list
                 embeddings[name] = {
                     "embedding": np.array(embedding_list),
                     "count": int(count),
                     "history": [np.array(hist) for hist in history_list]
                 }
             except (json.JSONDecodeError, ValueError):
+                print(f"Error parsing embedding for {name}.")
                 continue  # Skip invalid data
 
         return embeddings
