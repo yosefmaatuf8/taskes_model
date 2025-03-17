@@ -6,6 +6,8 @@ import base64
 import wave
 import time
 import requests
+import fcntl  
+import select
 import threading
 from datetime import datetime
 import boto3
@@ -80,6 +82,32 @@ class StreamRecorder:
             print(f"Failed to get Access Token: {response.status_code}, {response.text}")
             return None
 
+    def is_meeting_active(self):
+        access_token = self.get_access_token()
+        if not access_token:
+            print("Failed to obtain access token, skipping meeting check.")
+            return False
+
+        url = f"https://api.zoom.us/v2/meetings/{self.meeting_id}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                meeting_data = response.json()
+                return meeting_data.get("status") == 'started'
+            elif response.status_code == 404:
+                print("Meeting not found, assuming it has ended.")
+                return False
+            else:
+                print(f"Error checking meeting status: {response.status_code}, {response.text}")
+                return False
+        except requests.exceptions.RequestException as e:
+            print(f"Network error while checking meeting status: {e}")
+            return False
 
     def start_zoom_streaming(self):
         """ מעדכן את פרטי הזרם ומתחיל סטרימינג בפגישת Zoom """
@@ -171,19 +199,25 @@ class StreamRecorder:
         return any(abs(int.from_bytes(audio_chunk[i:i + 2], 'little', signed=True)) > self.silence_threshold
                    for i in range(0, len(audio_chunk), 2))
 
+
     def monitor_and_record(self):
-
-
 
         if not self.check_ffmpeg():
             return
 
         while True:
+            start_zoom_streaming = self.is_meeting_active()
+            if not start_zoom_streaming:
+                print("Meeting is not active, waiting...")
+                time.sleep(30)
+                continue
+            print("Meeting is active, starting streaming...")
             start_zoom_streaming = self.start_zoom_streaming()
             if not start_zoom_streaming:
-                time.sleep(15)
+                print("Failed to start streaming, retrying...")
+                time.sleep(30)
                 continue
-
+                
             if not self.check_rtmp_connection():
                 print("Waiting for stream connection...")
                 time.sleep(5)
@@ -199,6 +233,9 @@ class StreamRecorder:
             ]
 
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # Set ffmpeg stdout to non-blocking mode
+            flags = fcntl.fcntl(process.stdout, fcntl.F_GETFL)
+            fcntl.fcntl(process.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
             stderr_thread = threading.Thread(target=lambda: process.stderr.read())
             stderr_thread.daemon = True
@@ -214,42 +251,46 @@ class StreamRecorder:
 
             try:
                 while True:
-                    # בדיקה אם `ffmpeg` נסגר
-                    if process.poll() is not None:
-                        if stream_lost_start_time is None:
-                            stream_lost_start_time = time.time()  # מתחילים למדוד כמה זמן הזרם כבוי
-                        elif time.time() - stream_lost_start_time >= self.silence_timeout:
-                            print("FFmpeg process closed for too long. Stopping recording...")
-                            break  # זרם הפסיק לזמן ממושך - מפסיקים את ההקלטה
-                        time.sleep(1)
-                        continue  # ממתינים לזרם לחזור
+                    
+                    # # בדיקה אם `ffmpeg` נסגר
+                    # if process.poll() is not None:
+                    #     print("FFmpeg process closed")
+                    #     if stream_lost_start_time is None:
+                    #         stream_lost_start_time = time.time()  # מתחילים למדוד כמה זמן הזרם 
+                    #         print("Waiting for stream to return...")
+                    #     elif time.time() - stream_lost_start_time >= self.silence_timeout:
+                    #         print("FFmpeg process closed for too long. Stopping recording...")
+                    #         break  # זרם הפסיק לזמן ממושך - מפסיקים את ההקלטה
+                    #     print(time.time() - stream_lost_start_time)
+                    #     time.sleep(1)
+                    #     continue  # ממתינים לזרם לחזור
 
-                    audio_chunk = process.stdout.read(1024 * 16)
+                    rlist, _, _ = select.select([process.stdout], [], [], 1)  # Wait up to 1 second
+                    if rlist:
+                        audio_chunk = process.stdout.read(1024 * 16)
+                    else:
+                        audio_chunk = b''
                     if not audio_chunk:
                         silence_counter += 1
                         if stream_lost_start_time is None:
                             stream_lost_start_time = time.time()
                         time.sleep(1)
-
                         if time.time() - stream_lost_start_time >= self.silence_timeout:
                             print("No audio detected for too long. Stopping recording...")
                             break
-
                         continue
 
-                        # אם חזר אודיו - מאפסים את זמן איבוד הזרם
+                    # אם חזר אודיו - מאפסים את זמן איבוד הזרם
                     stream_lost_start_time = None
                     silence_counter = 0
 
                     has_activity = self.check_audio_activity(audio_chunk)
-
                     if has_activity:
                         consecutive_silence_chunks = 0
                         last_active_audio = time.time()
                         if not self.recording_started and not audio_activity_detected:
                             audio_activity_detected = True
                             continue
-
                         if audio_activity_detected and not self.recording_started:
                             print("Meeting detected, starting recording...")
                             self.setup_new_meeting()
@@ -258,23 +299,19 @@ class StreamRecorder:
                             wav_file.setsampwidth(2)
                             wav_file.setframerate(16000)
                             self.recording_started = True
-
                     else:
                         consecutive_silence_chunks += 1
 
                     if self.recording_started:
                         wav_file.writeframes(audio_chunk)
                         buffer.extend(audio_chunk)
-
                         if has_activity:
                             last_active_audio = time.time()
                         elif time.time() - last_active_audio > self.silence_timeout:
                             print("Meeting ended, saving recording...")
                             break
-
                         frames_written = wav_file.tell()
                         recorded_duration = frames_written / 16000.0
-
                         if recorded_duration - self.last_recorded_duration >= self.chunk_interval:
                             chunk_start_time = self.last_recorded_duration
                             chunk_end_time = recorded_duration
@@ -292,8 +329,7 @@ class StreamRecorder:
                     print("Meeting ended, saving recording...")
                     if wav_file:
                         wav_file.close()
-                    file_size = os.path.getsize(self.full_recording_path) if os.path.exists(
-                        self.full_recording_path) else 0
+                    file_size = os.path.getsize(self.full_recording_path) if os.path.exists(self.full_recording_path) else 0
                     if file_size > 1024 * 100:
                         self.meeting_analyzer.stop_transcription(self.meeting_start_time_peth)
                         s3_key = f"meetings/{self.output_dir}/full_meeting.wav"
