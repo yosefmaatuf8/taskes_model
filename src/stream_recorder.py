@@ -188,7 +188,8 @@ class StreamRecorder:
         self.last_chunk_time = time.monotonic()  # Not used for chunk timing anymore
         self.last_recorded_duration = 0  # Reset recorded duration
         self.meeting_start_time_peth = datetime.now()
-        self.output_dir = GLOBALS.output_path + f"/meeting_{self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')}"
+        self.meeting_start_time_peth = self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')
+        self.output_dir = GLOBALS.output_path + f"/meeting_{self.meeting_start_time_peth}"
         os.makedirs(self.output_dir, exist_ok=True)
         self.full_recording_path = os.path.join(self.output_dir, "full_meeting.wav")
         self.meeting_analyzer = Manager(self.full_recording_path, self.output_dir)
