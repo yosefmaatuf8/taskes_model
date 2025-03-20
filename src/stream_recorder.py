@@ -1,15 +1,10 @@
 import subprocess
 import os
 import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import base64
-import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import base64
 import wave
 import time
-import requests
 import requests
 import fcntl  
 import select
@@ -22,11 +17,6 @@ from src.main_manager import Manager  # Real-time transcription
 
 
 class StreamRecorder:
-    def __init__(self, meeting_id=None, client_id=None, client_secret=None, account_id=None,
-                 stream_url=GLOBALS.stream_url, stream_key=GLOBALS.stream_key, bucket_name=GLOBALS.bucket_name,
-                 aws_access_key_id=GLOBALS.aws_access_key_id, aws_secret_access_key=GLOBALS.aws_secret_access_key,
-                 chunk_interval=GLOBALS.chunk_interval, silence_timeout=GLOBALS.silence_timeout,
-                 region_name='us-east-1'):
     def __init__(self,
     meeting_id=GLOBALS.meeting_id,
     client_id=GLOBALS.client_id,
@@ -42,11 +32,6 @@ class StreamRecorder:
     region_name='us-east-1'):
 
         self.meeting_start_time = None
-        self.meeting_id = meeting_id
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.account_id = account_id
-        self.stream_key = stream_key
         self.meeting_id = meeting_id
         self.client_id = client_id
         self.client_secret = client_secret
@@ -69,71 +54,6 @@ class StreamRecorder:
         )
         self.bucket_name = bucket_name
         self.recording_started = False  # Flag to track if we're in an active recording
-
-    def get_base64_credentials(self):
-        """ממיר את client_id וה-client_secret לפורמט Base64 לצורך Authentication"""
-        credentials = f"{self.client_id}:{self.client_secret}"
-        return base64.b64encode(credentials.encode()).decode()
-
-    def get_access_token(self):
-        """ מקבל Access Token באמצעות Server-to-Server OAuth """
-        url = "https://zoom.us/oauth/token"
-        params = {
-            "grant_type": "account_credentials",
-            "account_id": self.account_id  # ודא שיש לך משתנה account_id
-        }
-        headers = {
-            "Authorization": f"Basic {self.get_base64_credentials()}",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-
-        response = requests.post(url, data=params, headers=headers)
-
-        if response.status_code == 200:
-            return response.json().get("access_token")
-        else:
-            print(f"Failed to get Access Token: {response.status_code}, {response.text}")
-            return None
-
-    def start_zoom_streaming(self):
-        """ מעדכן את פרטי הזרם ומתחיל סטרימינג בפגישת Zoom """
-        access_token = self.get_access_token()
-        if not access_token:
-            print("Failed to obtain access token, skipping stream start.")
-            return False
-
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
-        }
-
-        # שלב 1: עדכון פרטי הזרם
-        update_url = f"https://api.zoom.us/v2/meetings/{self.meeting_id}/livestream"
-
-        stream_data = {
-            "stream_url": "rtmp://54.163.147.71/live",
-            "stream_key": "myStreamKey",
-            "page_url": "https://yourwebsite.com/live"
-        }
-
-        update_response = requests.patch(update_url, json=stream_data, headers=headers)
-
-        if update_response.status_code == 204:
-            print("Live stream details updated successfully.")
-        else:
-            print(f"Failed to update live stream details: {update_response.status_code}, {update_response.text}")
-            return False
-
-        # שלב 2: הפעלת הסטרימינג
-        start_url = f"https://api.zoom.us/v2/meetings/{self.meeting_id}/livestream/status"
-        start_response = requests.patch(start_url, json={"action": "start"}, headers=headers)
-
-        if start_response.status_code == 204:
-            print("Live stream started successfully!")
-            return True
-        else:
-            print(f"Failed to start live stream: {start_response.status_code}, {start_response.text}")
-            return False
 
 
     def get_base64_credentials(self):
@@ -242,7 +162,6 @@ class StreamRecorder:
     def check_rtmp_connection(self):
         try:
             command = ['ffprobe', '-v', 'quiet', self.stream_url + self.stream_key]
-            command = ['ffprobe', '-v', 'quiet', self.stream_url + self.stream_key]
             result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
             return result.returncode == 0
         except (subprocess.TimeoutExpired, Exception):
@@ -271,6 +190,7 @@ class StreamRecorder:
         self.meeting_start_time_peth = datetime.now()
         self.meeting_start_time_peth = self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')
         self.output_dir = GLOBALS.output_path + f"/meeting_{self.meeting_start_time_peth}"
+        self.meeting_start_time_formatted = datetime.now().strftime('%Y-%m-%d %H:%M')
         os.makedirs(self.output_dir, exist_ok=True)
         self.full_recording_path = os.path.join(self.output_dir, "full_meeting.wav")
         self.meeting_analyzer = Manager(self.full_recording_path, self.output_dir)
@@ -284,16 +204,10 @@ class StreamRecorder:
 
     def monitor_and_record(self):
 
-
         if not self.check_ffmpeg():
             return
 
         while True:
-            start_zoom_streaming = self.start_zoom_streaming()
-            if not start_zoom_streaming:
-                time.sleep(15)
-                continue
-
             start_zoom_streaming = self.is_meeting_active()
             if not start_zoom_streaming:
                 print("Meeting is not active, waiting...")
@@ -313,7 +227,6 @@ class StreamRecorder:
 
             command = [
                 "ffmpeg",
-                "-i", self.stream_url + self.stream_key,
                 "-i", self.stream_url+self.stream_key,
                 "-ac", "1",
                 "-ar", "16000",
@@ -420,7 +333,7 @@ class StreamRecorder:
                         wav_file.close()
                     file_size = os.path.getsize(self.full_recording_path) if os.path.exists(self.full_recording_path) else 0
                     if file_size > 1024 * 100:
-                        self.meeting_analyzer.stop_transcription(self.meeting_start_time_peth)
+                        self.meeting_analyzer.stop_transcription(self.meeting_start_time_formatted)
                         s3_key = f"meetings/{self.output_dir}/full_meeting.wav"
                         s3_path = self.upload_to_s3(self.full_recording_path, s3_key)
                         if s3_path:
