@@ -22,6 +22,7 @@ class Manager:
         self.meeting_datetime = None
         self.db_manager = DBManager()
         print(GLOBALS.openai_model_name)
+       
         if not os.path.exists (self.db_manager.db_tasks_path) or not os.path.exists (self.db_manager.db_users_path):
             init_project = InitProject()
             init_project.run()
@@ -60,7 +61,7 @@ class Manager:
         self.edited_transcript = self.post_transcription.process_transcription(self.transcription_json_str)
 
     def update_db(self):
-       output_db =  self.db_manager.update_project_data(self.edited_transcript, self.meeting_id, self.meeting_datetime)
+       output_db =  self.db_manager.update_project_data(self.transcription_json_str, self.edited_transcript, self.meeting_id, self.meeting_datetime)
        if output_db:
             self.updated_topics = output_db.get('updated_topics')
             self.updated_for_trello = output_db.get('updated_for_trello')
@@ -96,7 +97,7 @@ class Manager:
             print("Aborting: No edited transcript.")
             return
         self.update_db()
-        # self.daily_summary()
+        self.daily_summary()
         if self.updated_for_trello:
             self.update_trello()
         if not self.updated_for_trello:
@@ -118,9 +119,15 @@ class Manager:
         self.run()
 
 if __name__ == "__main__":
-    test = Manager("/home/ubuntu/taskes_model_2/db/downloaded_meetings/full_meeting.wav")
+    test = Manager("db/tests/full_meeting.wav")
+    # path = "db/tests/final_kickoff_meeting_transcription.json"
     # path = "db/tests/final_kickoff_meeting_transcription.json"
     # with open(path, "r", encoding="utf-8") as f:
+    #    test_data = json.load(f)
+    # test.transcription_json_str = str(test_data.get("transcription",[]))
+    # test.trello_list = str(test_data.get("trello_board"))
+    # test.id_users_name_trello = str(test_data.get("names_trello"))
+
     #    test_data = json.load(f)
     # test.transcription_json_str = str(test_data.get("transcription",[]))
     # test.trello_list = str(test_data.get("trello_board"))

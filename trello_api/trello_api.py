@@ -1,4 +1,6 @@
+import sys
 import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import re
 import requests
 import json
@@ -7,7 +9,7 @@ from trello import TrelloClient
 from globals import GLOBALS
 
 class TrelloAPI:
-    def __init__(self, trello_board_id=None, easy_fields_plugin_id = "664a47ac4346bf4424851478"):
+    def __init__(self, trello_board_id=None):
         load_dotenv()
         self.client = TrelloClient(
             api_key=os.getenv('TRELLO_API_KEY'),
@@ -18,7 +20,6 @@ class TrelloAPI:
         self.base_url = "https://api.trello.com/1"
         self.api_key = os.getenv('TRELLO_API_KEY')
         self.token = os.getenv('TRELLO_API_TOKEN')
-        self.easy_fields_plugin_id = easy_fields_plugin_id
         self.custom_fields = self.get_all_custom_fields()
 
 
@@ -250,11 +251,13 @@ class TrelloAPI:
             print(f"Card '{card_name}' not found.")
 
     def get_all_card_details(self):
-        """Fetch all card details including users, description, and list information."""
+        """
+        Fetch all card details from OPEN lists only, including users, description, and list information.
+        """
         board = self.client.get_board(self.board_id)
         cards_details = {}
 
-        for trello_list in board.all_lists():
+        for trello_list in board.list_lists("open"):  # Fetch only active (not archived) lists
             for card in trello_list.list_cards():
                 card_members = [self.client.get_member(member_id).username for member_id in card.member_ids]
                 cards_details[card.name] = {
@@ -264,6 +267,7 @@ class TrelloAPI:
                     "list": trello_list.name
                 }
         return cards_details
+
 
     def get_usernames(self):
         """Fetch all usernames of members in the board."""
@@ -282,15 +286,25 @@ class TrelloAPI:
         boards = self.client.list_boards()
         return [{"id": board.id, "name": board.name, "url": board.url} for board in boards]
 
+    def clear_board_and_lists(self):
+        """
+        Deletes all cards and lists from the Trello board.
+        """
+        board = self.client.get_board(self.board_id)
+        # Now, delete all lists (Trello does not allow direct deletion, so we close them)
+        for trello_list in board.all_lists():
+            trello_list.close()  # Close list (equivalent to deleting in Trello)
+            print(f"List '{trello_list.name}' closed.")
 
 # Run the example flow
 if __name__ == "__main__":
-    trello_api = TrelloAPI()
-    # print(trello_api.get_all_boards())
-    # print(trello_api.get_all_card_details())
-    trello_api.create_custom_field("id_db", "text")
-    fields_data =trello_api.get_all_custom_fields()
-    print(json.dumps(fields_data, indent=2))
+    trello_api = TrelloAPI("nEnb2Pqa")
+    print(trello_api.get_all_boards())
+    trello_api.clear_board_and_lists()
+    print(trello_api.get_all_card_details())
+    # trello_api.create_custom_field("id_db", "text")
+    # fields_data =trello_api.get_all_custom_fields()
+    # print(json.dumps(fields_data, indent=2))
     #
     #
     # API_KEY = os.getenv('TRELLO_API_KEY')

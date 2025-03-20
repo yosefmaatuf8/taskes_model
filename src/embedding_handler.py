@@ -229,8 +229,15 @@ class EmbeddingHandler:
         buffer = BytesIO()
         audio_clip[:self.segment_length * self.num_segments].export(buffer, format="wav")
         embedding = self.extract_embedding(audio_clip)
+        dict_speaker = {}
         speaker_label = f"speaker_{self.speaker_count}"
-        self.embeddings[speaker_label] = embedding
+        dict_speaker['embedding'] = embedding
+        dict_speaker['history'] = [embedding]
+        dict_speaker['count'] = 1
+        df['embedding'] = df['embedding'].astype(str)
+        df['history'] = df['history'].astype(str)
+        df['count'] = df['count'].astype(str)
+        self.embeddings[speaker_label] = dict_speaker
         print(f"add {speaker_label}")
         self.speakers.append(speaker_label)
         self.speaker_count += 1

@@ -33,27 +33,20 @@ class TranscriptionProcessing:
             transcription_data]
 
         for chunk in chunks:
+            print(chunk)
             prompt = f"""
-            You are an AI assistant specializing in **meeting transcription analysis**.
+            You are an AI assistant specializing in **meeting transcription summarization**.
             The following transcription is in **Hebrew**.
-            Your task is to **analyze, classify, and refine** the content while ensuring the output is in **English**.
-            
+            Your task is to **summarize the key points** in **English**, merging related information into a **structured format**.
+
             **Instructions:**
-            1. **Classify each sentence** into one of these categories:
-               - **Task** (defines a new task).
-               - **Update** (describes progress on an existing task).
-               - **General** (relevant but not a task or update).
-               - **Irrelevant** (not related to the discussion).
+            1. **Summarize the main discussion points** from this segment of the meeting.
+            2. **Combine similar ideas into one clear statement**.
+            3. **Remove irrelevant information and unrelated conversation**.
+            4. **Use concise, structured English**.
 
-            2. **Refine and structure all classified Tasks and Updates**:
-               - Identify the **speaker** and the **target audience** (if mentioned).
-               - Provide a **concise English summary** of the task or update.
-               - If it’s a **new task**, include its **status**.
-
-            3. **Translate the refined transcription into English**, ensuring clarity and accuracy.
-            
             ---
-            **Meeting Transcription (in Hebrew, do NOT translate this section):**  
+            **Meeting Transcription (in Hebrew, do NOT translate this section directly, summarize instead):**  
             ```  
             {chunk}  
             ```
@@ -62,21 +55,21 @@ class TranscriptionProcessing:
             **Expected JSON Output:**  
             ```json
             {{
-                "refined_transcription": [
+                "summarized_transcription": [
                     {{
-                        "speaker": "John",
-                        "target": "Sarah",
-                        "text": "We need to start testing the new feature",
-                        "category": "Task",
-                        "status": "In Progress",
-                        "summary": "John informed Sarah that testing should begin for the new feature."
+                        "summary": "The backend team discussed database migration issues and CI/CD optimizations. The frontend team is working on React 18 migration.",
+                        "key_points": [
+                            "Backend: PostgreSQL migration is ongoing, performance bottlenecks remain.",
+                            "Frontend: UI framework upgrade in progress, needs design review.",
+                            "DevOps: CI/CD improvements, security testing in production."
+                        ]
                     }}
                 ]
             }}
             ```
             **Ensure the response is valid JSON with no additional text.**
             """
-
+             
             try:
                 response = self.client.chat.completions.create(
                     model=self.openai_model_name,
@@ -87,11 +80,10 @@ class TranscriptionProcessing:
                     max_tokens=self.max_tokens_response,
                     temperature=0.2
                 )
-
                 refined_data = extract_json_from_code_block(response.choices[0].message.content)
 
                 if refined_data:
-                    refined_results.extend(refined_data.get("refined_transcription", []))
+                    refined_results.extend(refined_data.get("summarized_transcription", []))
                 else:
                     print("❌ Invalid response received.")
 
@@ -100,4 +92,4 @@ class TranscriptionProcessing:
                 continue
 
         print("✅ Refined Results:", refined_results)
-        return {"refined_transcription": refined_results}
+        return {"summarized_transcription": refined_results}
