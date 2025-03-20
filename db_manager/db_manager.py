@@ -29,7 +29,7 @@ class DBManager:
         self.db_meetings_transcriptions_path = self.db_path + '/meetings_transcriptions.csv'
         self.client = OpenAI(api_key=GLOBALS.openai_api_key)
         self.users_data_str = None
-        if os.path.exists(self.db_full_data_path):
+        if os.path.exists(self.db_users_path):
             self.users_data_str = self.read_users_data()[1]
 
     def create_db(self, rows_users, rows_tasks, rows_topics, rows_full_data, rows_meetings):
@@ -134,8 +134,11 @@ class DBManager:
         for _, row in df.iterrows():
             name = str(row.get("name", "")).strip()
             embedding_str = str(row.get("embedding", "")).strip()
-            count = row.get("count", 1)  # Default to 1 if not found
+            count = str(row.get("count", 1))  # Default to 1 if not found
+            if count == "nan" or count == "" or not count:
+                count = 1
             history_str = row.get("history", "[]")  # Default to empty list if missing
+ 
 
             if not name or not embedding_str or embedding_str.lower() in ["", "nan", "none"]:
                 print(f"Skipping invalid row: {name}")
@@ -143,15 +146,17 @@ class DBManager:
 
             try:
                 embedding_list = json.loads(embedding_str)  # Convert JSON string to list
-
-                history_list = json.loads(str(history_str))  # Convert JSON string to list
+                try:
+                    history_list = json.loads(str(history_str))  # Convert JSON string to list
+                except json.JSONDecodeError:
+                    history_list = [embedding_list]  # Default to current embedding if history is invalid 
                 embeddings[name] = {
                     "embedding": np.array(embedding_list),
                     "count": int(count),
                     "history": [np.array(hist) for hist in history_list]
                 }
-            except (json.JSONDecodeError, ValueError):
-                print(f"Error parsing embedding for {name}.")
+            except json.JSONDecodeError as e:
+                print(f"Error parsing embedding for {name}, {e}.")
                 continue  # Skip invalid data
 
         return embeddings

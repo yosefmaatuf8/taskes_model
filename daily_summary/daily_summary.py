@@ -12,6 +12,7 @@ from utils.utils import split_text
 from globals import GLOBALS
 
 
+
 class DailySummary:
     def __init__(self, sender_email=GLOBALS.sender_email, sender_password=GLOBALS.sender_password,
                  smtp_server: str = "smtp.gmail.com", smtp_port: int = 587):
@@ -28,6 +29,7 @@ class DailySummary:
         self.from_email = self.sender_email
         self.db_manager = DBManager()
 
+
     def summarize_in_chunks(self, content: str, summary_type: str = "manager", previous_summary: str = "") -> str:
         """
         Summarizes large content in chunks while maintaining coherence.
@@ -39,14 +41,12 @@ class DailySummary:
         """
 
         # Load user data from CSV to map usernames to full names
-        df_users = self.db_manager.read_users_data()[0]
-        username_to_fullname = {row["name"]: row["full_name_english"] for _, row in df_users.iterrows() if
-                                pd.notna(row["full_name_english"])}
+        df_users = self.db_manager.read_db("db_users_path")
+        username_to_fullname = {row["name"]: row["full_name_english"] for _, row in df_users.iterrows() if pd.notna(row["full_name_english"])}
 
         # Load topic-specific summary instructions from topics.csv
         df_topics = self.db_manager.read_db("db_topics_status_path")
-        topic_instructions = {row["topic"]: row["prompt_for_summary"] for _, row in df_topics.iterrows() if
-                              pd.notna(row["prompt_for_summary"])}
+        topic_instructions = {row["topic"]: row["prompt_for_summary"] for _, row in df_topics.iterrows() if pd.notna(row["prompt_for_summary"])}
 
         # Format user mapping as a string for the prompt
         users_info = "\n".join([f"{username}: {full_name}" for username, full_name in username_to_fullname.items()])
@@ -60,8 +60,7 @@ class DailySummary:
 
         #  If manager instructions per topic are available, format them
         if summary_type == "manager" and topic_instructions:
-            formatted_topic_instructions = "\n".join(
-                [f"**{topic}:** {instr}" for topic, instr in topic_instructions.items()])
+            formatted_topic_instructions = "\n".join([f"**{topic}:** {instr}" for topic, instr in topic_instructions.items()])
             custom_topic_guidelines = f"\n\n**Custom Manager Instructions per Topic:**\n{formatted_topic_instructions}\n"
         else:
             custom_topic_guidelines = ""
@@ -71,7 +70,7 @@ class DailySummary:
         You are an AI meeting assistant. Generate a {summary_type} summary.
 
         **Instructions:** {instructions[summary_type]}
-
+        
         **Important Note:**
         The following mapping contains usernames and their corresponding full names.
         In your response, **replace every username with the corresponding full name**.

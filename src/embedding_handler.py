@@ -201,7 +201,8 @@ class EmbeddingHandler:
         closest_speaker = None
         min_distance = float("inf")
 
-        for speaker, embedding_list in track_embeddings.items():
+        for speaker in track_embeddings.keys():
+            embedding_list = track_embeddings[speaker]['history']
             # Compute cosine similarity against multiple embeddings
             distances = [cosine(segment_embedding, emb) for emb in embedding_list]
 

@@ -1,12 +1,14 @@
 import os
 import datetime
 import json
+import numpy as np
 import requests
 from pydub import AudioSegment
 from io import BytesIO
 from pyannote.audio import Audio
 import traceback
 import copy
+import librosa
 from utils.utils import split_text
 from dotenv import load_dotenv
 import tiktoken
@@ -26,7 +28,7 @@ class TranscriptionHandler:
         self.db_manager = DBManager()
         load_dotenv()
         self.openai_api_key = GLOBALS.openai_api_key
-        self.users_name_trello = GLOBALS.users_name_trello
+        self.users_name_trello = self.db_manager.read_users_data()[1]
         self.language = language
         self.wav_path = wav_path
         self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
@@ -73,6 +75,75 @@ class TranscriptionHandler:
             return chunks
         else:
             return [audio]
+
+
+    def remove_silent_parts(self, audio_data, threshold, margin): # Takes audio data and sample rate
+        """Removes silent parts from audio data (NumPy array)."""
+        try:
+            frame_length = 512
+            hop_length = frame_length // 4
+            rms = librosa.feature.rms(y=audio_data, frame_length=frame_length, hop_length=hop_length)[0]
+            db = librosa.amplitude_to_db(rms + 1e-10)
+            silent_frames = np.where(db < np.mean(db) + threshold)[0]
+            silent_frames_expanded = []
+            for frame in silent_frames:
+                silent_frames_expanded.extend(range(max(0, frame - margin // hop_length), min(len(db), frame + margin // hop_length)))
+            silent_frames_expanded = sorted(list(set(silent_frames_expanded)))
+
+            mask = np.ones_like(db, dtype=bool)
+            mask[silent_frames_expanded] = False
+
+            non_silent_indices = []
+            for i in range(len(mask)):
+                if mask[i]:
+                    start = i * hop_length
+                    end = min((i + 1) * hop_length, len(audio_data))
+                    non_silent_indices.extend(range(start, end))
+            cleaned_audio = audio_data[np.array(non_silent_indices)]
+
+            return cleaned_audio
+
+        except Exception as e:
+            print(f"Error processing audio: {e}")
+            return None
+
+
+    def load_and_clean_audio(self, chunk_duration=800, threshold=-10, margin=500):  # Add chunk_duration
+        """Loads, cleans audio in chunks, and returns a combined AudioSegment."""
+        try:
+            audio_segment = AudioSegment.from_file(self.wav_path)
+            sr = audio_segment.frame_rate
+            total_duration = len(audio_segment)  # in milliseconds
+            cleaned_audio_chunks = []
+
+            for start in tqdm(range(0, total_duration, chunk_duration * 1000), desc="Remove silent audio chunks"):
+                end = min(start + chunk_duration * 1000, total_duration)
+                chunk = audio_segment[start:end]
+
+                samples = np.array(chunk.get_array_of_samples(), dtype=np.int16)
+                cleaned_samples = self.remove_silent_parts(samples, threshold, margin)
+
+                if cleaned_samples is not None:
+                    cleaned_chunk = AudioSegment(
+                        cleaned_samples.tobytes(),
+                        frame_rate=sr,
+                        sample_width=chunk.sample_width,
+                        channels=chunk.channels
+                    )
+                    cleaned_audio_chunks.append(cleaned_chunk)
+
+            # Concatenate the cleaned chunks back together
+            if cleaned_audio_chunks:
+                cleaned_audio_segment = cleaned_audio_chunks[0]
+                for chunk in cleaned_audio_chunks[1:]:
+                    cleaned_audio_segment += chunk
+                return cleaned_audio_segment
+            else:
+                return None
+
+        except Exception as e:
+            print(f"Error loading or cleaning audio: {e}")
+            return None
 
     def transcribe_audio_with_whisper(self, audio):
         buffer = BytesIO()
@@ -190,7 +261,6 @@ class TranscriptionHandler:
         if "choices" not in response_json or not response_json["choices"]:
             print(f"Unexpected OpenAI response: {response_json}")
             return ""
-        print("response:  \n", response_json["choices"][0]["message"]["content"])
         return response_json["choices"][0]["message"]["content"]
 
 
@@ -352,17 +422,18 @@ class TranscriptionHandler:
 
         return self.transcription_for_ask_model
 
+
     def run_all_file(self, wav_path=None, output_dir=GLOBALS.output_path):
         """
         Process the entire audio file in chunks while maintaining logic consistency with `run()`.
         """
         if wav_path:
             self.wav_path = wav_path
-
+    
         try:
-            audio = AudioSegment.from_file(self.wav_path, format="wav")
+            audio = self.load_and_clean_audio()
+            audio.export(f"{self.wav_path}_clean.wav", format="wav")
             audio_chunks = self.split_audio_if_needed(audio)
-
         except Exception as e:
             print(f"Error loading audio file: {e}")
             traceback.print_exc()
@@ -422,6 +493,7 @@ class TranscriptionHandler:
                 inferred_names.get(key, key): value
                 for key, value in self.embedding_handler.embeddings.items()
             }
+            print("embeddings-",self.embedding_handler.embeddings)
             if self.db_manager.db_users_path:
                 self.db_manager.save_user_embeddings(self.embedding_handler.embeddings)
             # Step 5: Update transcription with inferred speaker names
@@ -432,10 +504,11 @@ class TranscriptionHandler:
                 segment['speaker'] = speaker_name  # Update with real speaker names
             df_users = self.db_manager.read_db("db_users_path")
             dict_username_name = dict(zip(df_users["name"], df_users["full_name_english"]))
-            self.transcription_for_ask_model = str([
+            transcription_json = [
                 {"speaker":dict_username_name.get(seg["speaker"],seg["speaker"]), "text": seg["text"]}
                 for seg in full_transcription_with_names
-            ])
+            ]
+            self.transcription_for_ask_model = str(transcription_json)
 
         except Exception as e:
             print(f"Error in inferring speaker names: {e}")
@@ -466,7 +539,7 @@ class TranscriptionHandler:
 
             # Save to JSON
             with open(self.output_path_json, "w", encoding="utf-8") as f:
-                json.dump(full_transcription_with_names, f, ensure_ascii=False, indent=4)
+                json.dump(transcription_json, f, ensure_ascii=False, indent=4)
 
 
 
