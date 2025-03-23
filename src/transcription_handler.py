@@ -26,11 +26,11 @@ class TranscriptionHandler:
         self.names_context = ''
         self.output_file = output_file
         self.db_manager = DBManager()
-        load_dotenv()
         self.openai_api_key = GLOBALS.openai_api_key
         self.users_name_trello = self.db_manager.read_users_data()[1]
         self.language = language
         self.wav_path = wav_path
+        print(f"Transcribing audio file: {self.wav_path}")
         self.tokenizer = tiktoken.encoding_for_model(self.openai_model_name)
         self.audio_helper = Audio()
         self.max_tokens_response = 1000

@@ -184,15 +184,18 @@ class InitProject:
 
     def run(self):
         """ Initialize DB files and populate them with structured data """
-        board_id = GLOBALS.bord_id_manager or self.create_new_trello_board("Manager Board")
-        if board_id:
-            env_file = find_dotenv()
-            load_dotenv(env_file)
-            set_key(env_file, "BORD_ID_MANAGER", board_id)
-            self.trello_api.board_id = board_id
+        board_id = GLOBALS.bord_id_manager
+        if not board_id:
+            board_id = self.create_new_trello_board("Manager Board")
+            if board_id: 
+                env_file = os.getenv("DOTENV_PATH", "global.env")
+                load_dotenv(env_file)
+                set_key(env_file, "BORD_ID_MANAGER", board_id)
+                self.trello_api.board_id = board_id
+            else:
+                print("Failed to create Trello board. Exiting.")
         else:
-            print("Failed to create Trello board. Exiting.")
-            
+            self.trello_api.board_id = board_id
         rows_users = [{"id": "", "name": "", "hebrew_name": "", "full_name_english": "", "embedding": ""}]
         rows_tasks = [{"id": "", "topic": "", "name": "", "status": "", "assigned_user": ""}]
         rows_topics = [{"topic": "", "category": "", "topic_status": "", "tasks_id": "", "prompt_for_summary": ""}] 

@@ -55,7 +55,7 @@ class StreamRecorder:
         self.bucket_name = bucket_name
         self.recording_started = False  # Flag to track if we're in an active recording
 
-
+         
     def get_base64_credentials(self):
         """ממיר את client_id וה-client_secret לפורמט Base64 לצורך Authentication"""
         credentials = f"{self.client_id}:{self.client_secret}"
@@ -192,8 +192,9 @@ class StreamRecorder:
         self.output_dir = GLOBALS.output_path + f"/meeting_{self.meeting_start_time_peth}"
         os.makedirs(self.output_dir, exist_ok=True)
         self.full_recording_path = os.path.join(self.output_dir, "full_meeting.wav")
+        print(f"New meeting started at {self.full_recording_path}")
         self.meeting_analyzer = Manager(self.full_recording_path, self.output_dir)
-
+        print("Meeting analyzer initialized")
     def check_audio_activity(self, audio_chunk):
         if not audio_chunk:
             return False
@@ -202,11 +203,15 @@ class StreamRecorder:
 
 
     def monitor_and_record(self):
-
+        
         if not self.check_ffmpeg():
             return
-
-        while True:
+        miting_zoom = True
+        nomber_attempts = 0
+        while miting_zoom:
+            nomber_attempts +=1
+            if nomber_attempts > 10:
+                miting_zoom = False
             start_zoom_streaming = self.is_meeting_active()
             if not start_zoom_streaming:
                 print("Meeting is not active, waiting...")
@@ -296,6 +301,7 @@ class StreamRecorder:
                             print("Meeting detected, starting recording...")
                             self.setup_new_meeting()
                             wav_file = wave.open(self.full_recording_path, 'wb')
+                            print("Recording started")
                             wav_file.setnchannels(1)
                             wav_file.setsampwidth(2)
                             wav_file.setframerate(16000)

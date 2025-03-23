@@ -5,7 +5,14 @@ from db.functions_dict import functions_dict
 
 class Globals:
     def __init__(self):
-        load_dotenv(find_dotenv(),override=True)
+        # Check if a specific .env path is provided via DOTENV_PATH env variable.
+        env_path = os.getenv("DOTENV_PATH")
+        if env_path and os.path.exists(env_path):
+            load_dotenv(env_path, override=True)
+        else:
+            # Load the default .env if no specific path is provided
+            load_dotenv(override=True)
+
         # Validate paths only for relevant variables
         # DB
         self.db_path = self.validate_path("DB_PATH")

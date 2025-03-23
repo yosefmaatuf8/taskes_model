@@ -23,6 +23,9 @@ class Manager:
         self.db_manager = DBManager()
         print(GLOBALS.openai_model_name)
        
+        if not os.path.exists (self.db_manager.db_tasks_path) or not os.path.exists (self.db_manager.db_users_path):
+            init_project = InitProject()
+            init_project.run()
         self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
         self.transcription_json_str = None
 
@@ -41,9 +44,6 @@ class Manager:
         except Exception as e:
             print(f"Error loading Trello data: {e}")
 
-        if not os.path.exists (self.db_manager.db_tasks_path) or not os.path.exists (self.db_manager.db_users_path):
-            init_project = InitProject()
-            init_project.run()
         self.trello_api_manager = TrelloAPI(GLOBALS.bord_id_manager)
 
 
