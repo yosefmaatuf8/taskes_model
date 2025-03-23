@@ -234,9 +234,6 @@ class EmbeddingHandler:
         dict_speaker['embedding'] = embedding
         dict_speaker['history'] = [embedding]
         dict_speaker['count'] = 1
-        df['embedding'] = df['embedding'].astype(str)
-        df['history'] = df['history'].astype(str)
-        df['count'] = df['count'].astype(str)
         self.embeddings[speaker_label] = dict_speaker
         print(f"add {speaker_label}")
         self.speakers.append(speaker_label)

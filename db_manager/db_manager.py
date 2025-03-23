@@ -55,9 +55,9 @@ class DBManager:
         if os.path.exists(file_path):
             df = pd.read_csv(file_path)
         else:
-            df = pd.DataFrame(columns=data.keys())
+            df = pd.DataFrame(columns=data[0].keys()) # Create empty DataFrame with columns
 
-        existing_ids = set(df[id_column].dropna().astype(str))  #  Get existing IDs as a set
+        existing_ids = set(df[id_column].dropna().astype(str))  # Get existing IDs as a set
 
         for entry in data:
             entry_id = entry.get(id_column)
@@ -67,16 +67,27 @@ class DBManager:
                 idx = df[df[id_column] == entry_id].index[0]
 
                 for key, value in entry.items():
-                    if key in df.columns and pd.notna(value):
-                        df.at[idx, key] = value
+                    if key in df.columns:
+                        if isinstance(value, (list, dict, np.ndarray)):
+                            df.at[idx, key] = json.dumps(value)
+                        elif pd.notna(value):
+                            df.at[idx, key] = value
+                        else:
+                            print(f"Missing value for: {key}")
                     else:
-                        print(f"Invalid column or missing value: {key} - {value}")
+                        print(f"Invalid column: {key}")
 
             # If the ID is missing or new, add a new record
             else:
-                df = pd.concat([df, pd.DataFrame([entry])], ignore_index=True)
+                cleaned_entry = {}
+                for key, value in entry.items():
+                    if isinstance(value, (list, dict, np.ndarray)):
+                        cleaned_entry[key] = json.dumps(value)
+                    else:
+                        cleaned_entry[key] = value
+                df = pd.concat([df, pd.DataFrame([cleaned_entry])], ignore_index=True)
 
-        #  Save the updated DataFrame back to CSV
+        # Save the updated DataFrame back to CSV
         df.to_csv(file_path, index=False)
 
     def read_db(self, type_db):

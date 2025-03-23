@@ -1,6 +1,7 @@
 from trello_api.trello_api import TrelloAPI
 from db_manager.db_manager import DBManager
 from collections import defaultdict
+import time
 
 class ExtractAndRunFunctions:
     def __init__(self, trello_api=TrelloAPI(), db_manager=DBManager()):
@@ -77,6 +78,7 @@ class ExtractAndRunFunctions:
                         new_status=new_status,
                         new_assigned_user=assigned_user
                     )
+                time.sleep(10)
 
         # Update status cards in lists
         for topic, status in topic_status_map.items():
@@ -89,3 +91,4 @@ class ExtractAndRunFunctions:
                     self.trello_api.update_card(status_card_name, new_description=f"Current Status: {status}")
                 else:
                     self.trello_api.create_card(topic, status_card_name, "","",f"Current Status: {status}","")
+            time.sleep(10)
