@@ -493,6 +493,7 @@ class TranscriptionHandler:
                 inferred_names.get(key, key): value
                 for key, value in self.embedding_handler.embeddings.items()
             }
+            print("embeddings-",self.embedding_handler.embeddings)
             if self.db_manager.db_users_path:
                 self.db_manager.save_user_embeddings(self.embedding_handler.embeddings)
             # Step 5: Update transcription with inferred speaker names

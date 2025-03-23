@@ -26,6 +26,9 @@ class Manager:
         if not os.path.exists (self.db_manager.db_tasks_path) or not os.path.exists (self.db_manager.db_users_path):
             init_project = InitProject()
             init_project.run()
+        if not os.path.exists (self.db_manager.db_tasks_path) or not os.path.exists (self.db_manager.db_users_path):
+            init_project = InitProject()
+            init_project.run()
         self.transcription_handler = TranscriptionHandler(wav_path, output_dir) # for creat transcription with speakers
         self.transcription_json_str = None
 
@@ -120,7 +123,13 @@ class Manager:
 if __name__ == "__main__":
     test = Manager("db/tests/full_meeting.wav")
     # path = "db/tests/final_kickoff_meeting_transcription.json"
+    # path = "db/tests/final_kickoff_meeting_transcription.json"
     # with open(path, "r", encoding="utf-8") as f:
+    #    test_data = json.load(f)
+    # test.transcription_json_str = str(test_data.get("transcription",[]))
+    # test.trello_list = str(test_data.get("trello_board"))
+    # test.id_users_name_trello = str(test_data.get("names_trello"))
+
     #    test_data = json.load(f)
     # test.transcription_json_str = str(test_data.get("transcription",[]))
     # test.trello_list = str(test_data.get("trello_board"))

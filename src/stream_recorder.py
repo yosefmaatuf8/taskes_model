@@ -190,6 +190,7 @@ class StreamRecorder:
         self.meeting_start_time_peth = datetime.now()
         self.meeting_start_time_peth = self.meeting_start_time_peth.strftime('%Y%m%d_%H%M%S')
         self.output_dir = GLOBALS.output_path + f"/meeting_{self.meeting_start_time_peth}"
+        self.meeting_start_time_formatted = datetime.now().strftime('%Y-%m-%d %H:%M')
         os.makedirs(self.output_dir, exist_ok=True)
         self.full_recording_path = os.path.join(self.output_dir, "full_meeting.wav")
         print(f"New meeting started at {self.full_recording_path}")
@@ -338,7 +339,7 @@ class StreamRecorder:
                         wav_file.close()
                     file_size = os.path.getsize(self.full_recording_path) if os.path.exists(self.full_recording_path) else 0
                     if file_size > 1024 * 100:
-                        self.meeting_analyzer.stop_transcription(self.meeting_start_time_peth)
+                        self.meeting_analyzer.stop_transcription(self.meeting_start_time_formatted)
                         s3_key = f"meetings/{self.output_dir}/full_meeting.wav"
                         s3_path = self.upload_to_s3(self.full_recording_path, s3_key)
                         if s3_path:

@@ -123,9 +123,70 @@ class EmbeddingHandler:
             print(f"Error in compute_similarity: {e}")
             return None
 
+    def update_speaker_embedding(self, speaker, new_embedding):
+        """
+        Updates the stored embedding for a speaker using an exponential moving average.
+
+        - The more times a speaker is recognized, the slower the update (ensuring stability).
+        - If the speaker is new, simply store the embedding.
+
+        Args:
+            speaker (str): The identified speaker.
+            new_embedding (numpy.ndarray): The latest embedding.
+
+        Returns:
+            None
+        """
+        if speaker in self.embeddings:
+            # Get previous embedding and count of recognitions
+            old_embedding = self.embeddings[speaker]['embedding']
+            count = self.embeddings[speaker]['count']
+
+            # Compute a new averaged embedding
+            updated_embedding = (old_embedding * count + new_embedding) / (count + 1)
+
+            # Update storage
+            self.embeddings[speaker]['embedding'] = updated_embedding
+            self.embeddings[speaker]['count'] += 1
+        else:
+            # First-time speaker
+            self.embeddings[speaker] = {'embedding': new_embedding, 'count': 1, 'history': [new_embedding]}
+
+        # # Save to database
+        # self.db_manager.save_user_embeddings(self.embeddings)
+
+    def update_speaker_embedding_history(self, speaker, new_embedding, max_history=5):
+        """
+        Updates the history of embeddings for a speaker, maintaining only the last `max_history` embeddings.
+
+        - Stores multiple recent embeddings instead of just one.
+        - Helps track variation in voice characteristics over time.
+        - Prevents outdated embeddings from affecting recognition.
+        """
+        if speaker in self.embeddings:
+            # Append new embedding to history
+            self.embeddings[speaker]['history'].append(new_embedding)
+
+            # Keep only the last `max_history` embeddings
+            if len(self.embeddings[speaker]['history']) > max_history:
+                self.embeddings[speaker]['history'].pop(0)
+
+            # Compute the weighted average of stored embeddings
+            weights = np.linspace(1, 0.5, len(self.embeddings[speaker]['history']))  # Recent embeddings get more weight
+            weighted_avg_embedding = np.average(self.embeddings[speaker]['history'], axis=0, weights=weights)
+
+            # Update storage
+            self.embeddings[speaker]['embedding'] = weighted_avg_embedding
+        else:
+            # First-time speaker
+            self.embeddings[speaker] = {'embedding': new_embedding, 'count': 1, 'history': [new_embedding]}
+        #
+        # # Save to database
+        # self.db_manager.save_user_embeddings(self.embeddings)
+
     def get_closest_speaker(self, segment_embedding, track_embeddings=None):
         """
-        Finds the closest speaker to a given embedding.
+        Finds the closest speaker to a given embedding using weighted cosine similarity.
 
         Args:
             segment_embedding (numpy.ndarray): The embedding to compare.
@@ -136,15 +197,21 @@ class EmbeddingHandler:
         """
         if track_embeddings is None:
             track_embeddings = self.embeddings
+
         closest_speaker = None
         min_distance = float("inf")
 
-        for speaker, track_embedding in track_embeddings.items():
-            # Calculate the cosine distance between embeddings
-            distance = cosine(segment_embedding, track_embedding)
+        for speaker in track_embeddings.keys():
+            embedding_list = track_embeddings[speaker]['history']
+            # Compute cosine similarity against multiple embeddings
+            distances = [cosine(segment_embedding, emb) for emb in embedding_list]
 
-            if distance < min_distance:
-                min_distance = distance
+            # Apply weighted averaging (recent embeddings contribute more)
+            weights = np.linspace(1, 0.5, len(distances))  # More weight for recent embeddings
+            weighted_distance = np.average(distances, weights=weights)
+
+            if weighted_distance < min_distance:
+                min_distance = weighted_distance
                 closest_speaker = speaker
 
         return closest_speaker, min_distance
@@ -162,8 +229,12 @@ class EmbeddingHandler:
         buffer = BytesIO()
         audio_clip[:self.segment_length * self.num_segments].export(buffer, format="wav")
         embedding = self.extract_embedding(audio_clip)
+        dict_speaker = {}
         speaker_label = f"speaker_{self.speaker_count}"
-        self.embeddings[speaker_label] = embedding
+        dict_speaker['embedding'] = embedding
+        dict_speaker['history'] = [embedding]
+        dict_speaker['count'] = 1
+        self.embeddings[speaker_label] = dict_speaker
         print(f"add {speaker_label}")
         self.speakers.append(speaker_label)
         self.speaker_count += 1

@@ -30,7 +30,7 @@ class DBManager:
         self.db_meetings_transcriptions_path = self.db_path + '/meetings_transcriptions.csv'
         self.client = OpenAI(api_key=GLOBALS.openai_api_key)
         self.users_data_str = None
-        if os.path.exists(self.db_full_data_path):
+        if os.path.exists(self.db_users_path):
             self.users_data_str = self.read_users_data()[1]
 
     def create_db(self, rows_users, rows_tasks, rows_topics, rows_full_data, rows_meetings,rows_categories):
@@ -55,9 +55,9 @@ class DBManager:
         if os.path.exists(file_path):
             df = pd.read_csv(file_path)
         else:
-            df = pd.DataFrame(columns=data.keys())
+            df = pd.DataFrame(columns=data[0].keys()) # Create empty DataFrame with columns
 
-        existing_ids = set(df[id_column].dropna().astype(str))  #  Get existing IDs as a set
+        existing_ids = set(df[id_column].dropna().astype(str))  # Get existing IDs as a set
 
         for entry in data:
             entry_id = entry.get(id_column)
@@ -67,16 +67,27 @@ class DBManager:
                 idx = df[df[id_column] == entry_id].index[0]
 
                 for key, value in entry.items():
-                    if key in df.columns and pd.notna(value):
-                        df.at[idx, key] = value
+                    if key in df.columns:
+                        if isinstance(value, (list, dict, np.ndarray)):
+                            df.at[idx, key] = json.dumps(value)
+                        elif pd.notna(value):
+                            df.at[idx, key] = value
+                        else:
+                            print(f"Missing value for: {key}")
                     else:
-                        print(f"Invalid column or missing value: {key} - {value}")
+                        print(f"Invalid column: {key}")
 
             # If the ID is missing or new, add a new record
             else:
-                df = pd.concat([df, pd.DataFrame([entry])], ignore_index=True)
+                cleaned_entry = {}
+                for key, value in entry.items():
+                    if isinstance(value, (list, dict, np.ndarray)):
+                        cleaned_entry[key] = json.dumps(value)
+                    else:
+                        cleaned_entry[key] = value
+                df = pd.concat([df, pd.DataFrame([cleaned_entry])], ignore_index=True)
 
-        #  Save the updated DataFrame back to CSV
+        # Save the updated DataFrame back to CSV
         df.to_csv(file_path, index=False)
 
     def read_db(self, type_db):
@@ -116,6 +127,15 @@ class DBManager:
             return None
 
     def load_user_embeddings(self):
+        """
+        Loads user embeddings from the CSV database and reconstructs the structured dictionary with history tracking.
+
+        Returns:
+            dict: A dictionary where keys are speaker names, and values are dictionaries containing:
+                  - "embedding": The weighted average embedding.
+                  - "count": Number of times the speaker has been recognized.
+                  - "history": A list of past embeddings for tracking variation.
+        """
         embeddings = {}
 
         if not self.db_users_path or not os.path.exists(self.db_users_path):
@@ -123,7 +143,8 @@ class DBManager:
             return embeddings
 
         try:
-            df = pd.read_csv(self.db_users_path, usecols=["name", "embedding"])  # Load only needed columns
+            df = pd.read_csv(self.db_users_path,
+                             usecols=["name", "embedding", "count", "history"])  # Load required columns
         except Exception as e:
             print(f"Error loading CSV file: {e}")
             return embeddings
@@ -131,26 +152,60 @@ class DBManager:
         for _, row in df.iterrows():
             name = str(row.get("name", "")).strip()
             embedding_str = str(row.get("embedding", "")).strip()
+            count = str(row.get("count", 1))  # Default to 1 if not found
+            if count == "nan" or count == "" or not count:
+                count = 1
+            history_str = row.get("history", "[]")  # Default to empty list if missing
+ 
 
             if not name or not embedding_str or embedding_str.lower() in ["", "nan", "none"]:
-                continue  # Skip rows with missing values
+                print(f"Skipping invalid row: {name}")
+                continue  # Skip invalid rows
 
             try:
                 embedding_list = json.loads(embedding_str)  # Convert JSON string to list
-                embeddings[name] = np.array(embedding_list)  # Store as NumPy array
-            except (json.JSONDecodeError, ValueError):
-                continue  # Skip invalid embeddings
+                try:
+                    history_list = json.loads(str(history_str))  # Convert JSON string to list
+                except json.JSONDecodeError:
+                    history_list = [embedding_list]  # Default to current embedding if history is invalid 
+                embeddings[name] = {
+                    "embedding": np.array(embedding_list),
+                    "count": int(count),
+                    "history": [np.array(hist) for hist in history_list]
+                }
+            except json.JSONDecodeError as e:
+                print(f"Error parsing embedding for {name}, {e}.")
+                continue  # Skip invalid data
 
         return embeddings
 
     def save_user_embeddings(self, embeddings):
+        """
+        Saves the structured embeddings dictionary back to the CSV database, including history tracking.
+
+        Args:
+            embeddings (dict): A dictionary of speaker embeddings with history and recognition counts.
+        """
         df = pd.read_csv(self.db_users_path)
-        if 'embedding' not in df.columns:
-            df['embedding'] = ""
+
+        # Ensure necessary columns exist
+        for col in ["embedding", "count", "history"]:
+            if col not in df.columns:
+                df[col] = ""
 
         df['embedding'] = df['embedding'].astype(str)
-        for user_id, emb in embeddings.items():
-            df.loc[df['full_name_english'] == user_id, 'embedding'] = json.dumps(emb.tolist())
+        df['history'] = df['history'].astype(str)
+        df['count'] = df['count'].astype(str)
+
+        for speaker, data in embeddings.items():
+            embedding_json = json.dumps(data["embedding"].tolist())  # Convert embedding to JSON
+            history_json = json.dumps([hist.tolist() for hist in data["history"]])  # Convert history to JSON
+            count_value = str(data["count"])
+
+            df.loc[df['name'] == speaker, 'embedding'] = embedding_json
+            df.loc[df['name'] == speaker, 'history'] = history_json
+            df.loc[df['name'] == speaker, 'count'] = count_value
+
         df.to_csv(self.db_users_path, index=False)
 
     def extract_topics_from_transcription(self, summarized_transcription):
